@@ -1,8 +1,6 @@
 const settings = {
 
-  ╔══════════════════════════════════════════════════╗
-  ║ Enter number, Name & Session Id only         
-  ╚══════════════════════════════════════════════════╝
+  // ═══════════ CHANGE HERE ═══════════
 
   ownerNumber: "254755660053",
   botOwner: "Rodgers",
@@ -11,13 +9,12 @@ const settings = {
   sessionServerUrl: process.env.SESSION_SERVER_URL || 'https://your-render-url.onrender.com',
   sessionPrefix: 'Nexora~',
 
-  ╔══════════════════════════════════════════════════╗
-  ║ You can only change prefix & mode below              
-  ╚══════════════════════════════════════════════════╝
-
-  botName: "𝐍𝐄𝐗𝐎𝐑𝐀 𝐌𝐃",
   prefix: ".",
   mode: "public",
+
+  // ═══════════════════════════════════
+
+  botName: "𝐍𝐄𝐗𝐎𝐑𝐀 𝐌𝐃",
 
   developerNumber: "254755660053",
   developerName: "RODGERS",
