@@ -6,7 +6,7 @@ const settings = {
   botOwner: "Rodgers",
 
   sessionId: process.env.SESSION_ID || 'PASTE_YOUR_SESSION_ID_HERE',
-  sessionServerUrl: process.env.SESSION_SERVER_URL || 'https://your-render-url.onrender.com',
+  sessionServerUrl: process.env.SESSION_SERVER_URL || 'https://nexora-md-pairsite.onrender.com',
   sessionPrefix: 'Nexora~',
 
   prefix: ".",
