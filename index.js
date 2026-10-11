@@ -40,7 +40,7 @@ const PhoneNumber = require('awesome-phonenumber');
 const mode = require('./lib/mode');
 const owner = require('./lib/owner');
 const logger = require('./lib/logger');
-const { enableChannelBranding } = require('./lib/channel');
+const { wrapSend } = require('./lib/channel');
 
 const {
   default: makeWASocket,
@@ -402,22 +402,14 @@ async function startNexora() {
     });
 
     // ─────────────────────────────────────────
-    // RAW SEND (bypasses channel branding)
+    // SEND PIPELINE (base → wipe → branding)
     // ─────────────────────────────────────────
-    global.rawSendMessage = Nexora.sendMessage.bind(Nexora);
+    const baseSend = Nexora.sendMessage.bind(Nexora);
 
-    enableChannelBranding(Nexora, settings);
-
-    Nexora.ev.on('creds.update', saveCreds);
-    store.bind(Nexora.ev);
-
-    // ─────────────────────────────────────────
-    // AUTO-WIPE + ANTI-BLOCK WRAPPER
-    // ─────────────────────────────────────────
-    const preWipeSend = Nexora.sendMessage.bind(Nexora);
-    Nexora.sendMessage = async function(jid, content, options = {}) {
+    // Wipe + anti-block wrapper (applies on base)
+    const wipeSend = async function(jid, content, options = {}) {
       try {
-        const result = await preWipeSend(jid, content, options);
+        const result = await baseSend(jid, content, options);
 
         if (global.autoWipeSeconds > 0 &&
             result?.key &&
@@ -426,12 +418,8 @@ async function startNexora() {
             !content?.protocolMessage) {
           setTimeout(async () => {
             try {
-              await preWipeSend(jid, {
-                delete: {
-                  remoteJid: jid,
-                  fromMe: true,
-                  id: result.key.id
-                }
+              await baseSend(jid, {
+                delete: { remoteJid: jid, fromMe: true, id: result.key.id }
               });
             } catch (e) {}
           }, global.autoWipeSeconds * 1000);
@@ -439,7 +427,6 @@ async function startNexora() {
 
         return result;
       } catch (err) {
-        // Anti-block detection
         if (global.antiBlock &&
             err.message &&
             (err.message.includes('forbidden') ||
@@ -459,7 +446,7 @@ async function startNexora() {
               const ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
               if (ownerNum) {
                 const ownerJid = ownerNum.includes('@') ? ownerNum : ownerNum + '@s.whatsapp.net';
-                await preWipeSend(ownerJid, {
+                await baseSend(ownerJid, {
                   text:
                     `ANTI-BLOCK DETECTED\n\n` +
                     `Number: ${num}\n` +
@@ -474,6 +461,15 @@ async function startNexora() {
         throw err;
       }
     };
+
+    // Branding wrapper (applies on wipeSend)
+    Nexora.sendMessage = wrapSend(wipeSend, settings);
+
+    // Raw sender for chatbot / system messages (no branding, no wipe)
+    global.rawSendMessage = baseSend;
+
+    Nexora.ev.on('creds.update', saveCreds);
+    store.bind(Nexora.ev);
 
     // ─────────────────────────────────────────
     // MESSAGES.UPSERT
@@ -962,9 +958,7 @@ Owner: ${userName}
 Developer: ${settings.developerName}
 Number: ${userNumber}
 Prefix: ${currentPrefix}
-Status: Online and Ready
-
-Join our channel for updates.
+Status: Online and ReadyJoin our channel for updates.
 
 ${settings.footer}`;
 
