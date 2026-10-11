@@ -9,9 +9,6 @@ const ui = require('../../lib/ui');
 
 const MENU_REACTIONS = ['👑', '✨', '🌟', '🔥', '💫', '⭐', '🎯', '🚀', '💎', '🎉'];
 
-// ─────────────────────────────────────────────
-// IMAGE FETCH
-// ─────────────────────────────────────────────
 async function fetchImageBuffer(url) {
   const res = await axios.get(url, {
     responseType: 'arraybuffer',
@@ -30,9 +27,6 @@ async function fetchImageBuffer(url) {
   return Buffer.from(res.data);
 }
 
-// ─────────────────────────────────────────────
-// SYSTEM INFO HELPERS
-// ─────────────────────────────────────────────
 const START_TIME = Date.now();
 
 function uptime() {
@@ -61,9 +55,6 @@ function formatNow() {
   });
 }
 
-// ─────────────────────────────────────────────
-// COMMAND LIST BUILDER
-// ─────────────────────────────────────────────
 function buildCategories() {
   const commands = global.commands;
   const categories = {};
@@ -96,9 +87,6 @@ function buildCategories() {
   return { categories, total: list.length };
 }
 
-// ─────────────────────────────────────────────
-// SHARED INFO BLOCK
-// ─────────────────────────────────────────────
 function infoLines(pushName) {
   const currentMode = global.botMode ? String(global.botMode).toUpperCase() : 'PUBLIC';
   return {
@@ -116,9 +104,6 @@ function infoLines(pushName) {
   };
 }
 
-// ─────────────────────────────────────────────
-// THEME RENDERERS
-// ─────────────────────────────────────────────
 function render1(info, categories, total, prefix) {
   let t = `╔═══════════════════╗\n`;
   t += `╠  ${info.botName}\n`;
@@ -371,9 +356,6 @@ const RENDERERS = {
   6: render6, 7: render7, 8: render8, 9: render9, 10: render10
 };
 
-// ─────────────────────────────────────────────
-// COMMAND
-// ─────────────────────────────────────────────
 module.exports = {
   name: 'menu',
   aliases: ['help', 'allmenu', 'cmds'],
