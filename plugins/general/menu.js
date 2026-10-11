@@ -119,8 +119,6 @@ function infoLines(pushName) {
 // ─────────────────────────────────────────────
 // THEME RENDERERS
 // ─────────────────────────────────────────────
-
-// THEME 1 - Classic Box
 function render1(info, categories, total, prefix) {
   let t = `╔═══════════════════╗\n`;
   t += `╠  ${info.botName}\n`;
@@ -148,11 +146,10 @@ function render1(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 2 - Double Line
 function render2(info, categories, total, prefix) {
   let t = `══════════════════════════\n`;
   t += `     ${info.botName}\n`;
-  t += `     𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝚁𝚘𝚍𝚐𝚎𝚛𝚜\𝚗`;
+  t += `     𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝚁𝚘𝚍𝚐𝚎𝚛𝚜\n`;
   t += `══════════════════════════\n\n`;
   t += `Owner      : ${info.owner}\n`;
   t += `Prefix     : ${prefix}\n`;
@@ -175,7 +172,6 @@ function render2(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 3 - Minimal
 function render3(info, categories, total, prefix) {
   let t = `${info.botName}\n─────────────\n\n`;
   t += `Owner   ${info.owner}\n`;
@@ -198,7 +194,6 @@ function render3(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 4 - Bracketed
 function render4(info, categories, total, prefix) {
   let t = `[ ${info.botName} ]\n=============\n\n`;
   t += `[ Owner ] ${info.owner}\n`;
@@ -222,7 +217,6 @@ function render4(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 5 - Starred
 function render5(info, categories, total, prefix) {
   let t = `* ${info.botName} *\n* * * * * * *\n\n`;
   t += `Owner: ${info.owner}\n`;
@@ -246,7 +240,6 @@ function render5(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 6 - Arrow
 function render6(info, categories, total, prefix) {
   let t = `>> ${info.botName} <<\n----------------\n\n`;
   t += `> Owner: ${info.owner}\n`;
@@ -270,7 +263,6 @@ function render6(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 7 - Dotted
 function render7(info, categories, total, prefix) {
   let t = `.....................\n   ${info.botName}\n.....................\n\n`;
   t += `Owner . . . . ${info.owner}\n`;
@@ -294,7 +286,6 @@ function render7(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 8 - Double Bracket PREMIUM
 function render8(info, categories, total, prefix) {
   let t = `╔══════════════════════════╗\n`;
   t += `║  ${info.botName}\n`;
@@ -322,7 +313,6 @@ function render8(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 9 - Ornate Crown PREMIUM
 function render9(info, categories, total, prefix) {
   let t = `╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n`;
   t += `┃ ◇ ${info.botName} ◇\n`;
@@ -350,7 +340,6 @@ function render9(info, categories, total, prefix) {
   return t;
 }
 
-// THEME 10 - Gradient Frame PREMIUM
 function render10(info, categories, total, prefix) {
   let t = `░▒▓█ ${info.botName} █▓▒░\n`;
   t += `░▒▓ Premium Edition ▓▒░\n`;
@@ -394,19 +383,16 @@ module.exports = {
   react: '👑',
 
   async execute(conn, mek, args, chatId, isOwner) {
-    // React
     try {
       const randomReact = MENU_REACTIONS[Math.floor(Math.random() * MENU_REACTIONS.length)];
       await conn.sendMessage(chatId, { react: { text: randomReact, key: mek.key } });
     } catch (e) {}
 
-    // Build info
     const pushName = mek.pushName || 'User';
     const info = infoLines(pushName);
     const { categories, total } = buildCategories();
     const prefix = settings.prefix || '.';
 
-    // Theme
     let themeNum = 1;
     try {
       themeNum = ui.getTheme();
@@ -423,7 +409,6 @@ module.exports = {
       menuText = `Menu error. Theme: ${themeNum}`;
     }
 
-    // Image
     let themeImage = null;
     try {
       if (settings.menuThemes && settings.menuThemes[themeNum] && settings.menuThemes[themeNum].image) {
@@ -436,7 +421,8 @@ module.exports = {
         const buffer = await fetchImageBuffer(themeImage);
         await conn.sendMessage(chatId, {
           image: buffer,
-          caption: menuText
+          caption: menuText,
+          withChannel: true
         });
         return;
       } catch (imgErr) {
@@ -444,9 +430,11 @@ module.exports = {
       }
     }
 
-    // Text fallback
     try {
-      await conn.sendMessage(chatId, { text: menuText });
+      await conn.sendMessage(chatId, {
+        text: menuText,
+        withChannel: true
+      });
     } catch (textErr) {
       console.log('[MENU] Text failed:', textErr.message);
     }
