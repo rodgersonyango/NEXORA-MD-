@@ -348,6 +348,21 @@ async function startNexora() {
   try {
     loadCommands();
 
+    // ═══════════════════════════════════════════════════════
+    // WEB-PAIRED SESSION LOADER (runs before socket setup)
+    // ═══════════════════════════════════════════════════════
+    try {
+      const { loadSession } = require('./lib/session');
+      const loaded = await loadSession();
+      if (loaded) {
+        logger.success('Web session loaded — skipping console pairing');
+      } else {
+        logger.info('No web session — using console pairing / QR flow');
+      }
+    } catch (e) {
+      logger.warn(`Session loader error: ${e.message}`);
+    }
+
     const sessionFolder = settings.sessionFolder || './data/session';
     if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder, { recursive: true });
 
