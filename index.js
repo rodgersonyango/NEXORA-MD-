@@ -26,7 +26,6 @@ const chalk = require('chalk');
 const path = require('path');
 const axios = require('axios');
 
-// Auto-create data folders
 try {
   if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
   if (!fs.existsSync('./data/session')) fs.mkdirSync('./data/session', { recursive: true });
@@ -58,15 +57,11 @@ const pino = require("pino");
 const readline = require("readline");
 const { rmSync } = require('fs');
 
-// ═══════════════════════════════════════════════════════
-// GLOBAL STATE
-// ═══════════════════════════════════════════════════════
 global.botMode = mode.getMode(settings.mode || 'public');
 global.autoWipeSeconds = 0;
 global.commands = new Map();
 global.autoReadPM = false;
 
-// Anti-delete
 try {
   if (fs.existsSync('./data/antidelete.json')) {
     const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
@@ -78,7 +73,6 @@ try {
   global.antiDelete = settings.antiDelete;
 }
 
-// Anti-edit
 try {
   if (fs.existsSync('./data/antiedit.json')) {
     const aeData = JSON.parse(fs.readFileSync('./data/antiedit.json', 'utf8'));
@@ -90,7 +84,6 @@ try {
   global.antiEdit = false;
 }
 
-// Anti-block
 try {
   if (fs.existsSync('./data/antiblock.json')) {
     const abData = JSON.parse(fs.readFileSync('./data/antiblock.json', 'utf8'));
@@ -102,7 +95,6 @@ try {
   global.antiBlock = false;
 }
 
-// Always online
 try {
   if (fs.existsSync('./data/alwaysonline.json')) {
     const aoData = JSON.parse(fs.readFileSync('./data/alwaysonline.json', 'utf8'));
@@ -114,7 +106,6 @@ try {
   global.alwaysOnline = false;
 }
 
-// Auto-typing
 try {
   if (fs.existsSync('./data/autotyping.json')) {
     const atData = JSON.parse(fs.readFileSync('./data/autotyping.json', 'utf8'));
@@ -131,7 +122,6 @@ try {
   global.autoTyping = { enabled: false, dm: false, groups: false, status: false };
 }
 
-// Auto-recording
 try {
   if (fs.existsSync('./data/autorecording.json')) {
     const arData = JSON.parse(fs.readFileSync('./data/autorecording.json', 'utf8'));
@@ -148,7 +138,6 @@ try {
   global.autoRecording = { enabled: false, dm: false, groups: false, status: false };
 }
 
-// Auto-chatbot
 try {
   if (fs.existsSync('./data/autochatbot.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/autochatbot.json', 'utf8'));
@@ -160,7 +149,6 @@ try {
   global.autoChatBot = settings.autoChatBot === true;
 }
 
-// Auto-status flags
 try {
   if (fs.existsSync('./data/status.json')) {
     const sd = JSON.parse(fs.readFileSync('./data/status.json', 'utf8'));
@@ -178,7 +166,6 @@ try {
   global.autoStatusFlags = { seen: false, react: false };
 }
 
-// Ghost mode
 try {
   if (fs.existsSync('./data/ghost.json')) {
     const gData = JSON.parse(fs.readFileSync('./data/ghost.json', 'utf8'));
@@ -190,7 +177,6 @@ try {
   global.ghostMode = false;
 }
 
-// Anti-call
 try {
   if (fs.existsSync('./data/anticall.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/anticall.json', 'utf8'));
@@ -204,9 +190,6 @@ try {
 
 global.customStatus = 'composing';
 
-// ═══════════════════════════════════════════════════════
-// IMAGE FETCH HELPER
-// ═══════════════════════════════════════════════════════
 async function fetchImageBuffer(url) {
   const res = await axios.get(url, {
     responseType: 'arraybuffer',
@@ -226,9 +209,6 @@ async function fetchImageBuffer(url) {
   return Buffer.from(res.data);
 }
 
-// ═══════════════════════════════════════════════════════
-// STATUS REACTION EMOJIS
-// ═══════════════════════════════════════════════════════
 function getDefaultReactionEmojis() {
   if (Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0) {
     return settings.statusReactionEmojis.slice();
@@ -254,9 +234,6 @@ function loadReactionEmojis() {
 
 let REACTION_EMOJIS = loadReactionEmojis();
 
-// ═══════════════════════════════════════════════════════
-// PLUGIN LOADER
-// ═══════════════════════════════════════════════════════
 function loadCommands() {
   const rootDir = path.join(process.cwd(), 'plugins');
   if (!fs.existsSync(rootDir)) fs.mkdirSync(rootDir, { recursive: true });
@@ -298,9 +275,6 @@ function loadCommands() {
   logger.success(`Loaded ${loaded} commands.`);
 }
 
-// ═══════════════════════════════════════════════════════
-// STORE + CACHE
-// ═══════════════════════════════════════════════════════
 const store = require('./lib/lightweight_store');
 store.readFromFile();
 setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000);
@@ -308,7 +282,6 @@ setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000);
 const processedMessages = new Set();
 setInterval(() => processedMessages.clear(), 3 * 60 * 1000);
 
-// Memory watchdog (less aggressive)
 setInterval(() => {
   const used = process.memoryUsage().rss / 1024 / 1024;
   if (used > 600) {
@@ -348,9 +321,6 @@ async function startNexora() {
   try {
     loadCommands();
 
-    // ═══════════════════════════════════════════════════════
-    // WEB-PAIRED SESSION LOADER (runs before socket setup)
-    // ═══════════════════════════════════════════════════════
     try {
       const { loadSession } = require('./lib/session');
       const loaded = await loadSession();
@@ -401,12 +371,8 @@ async function startNexora() {
       retryRequestDelayMs: 250,
     });
 
-    // ─────────────────────────────────────────
-    // SEND PIPELINE (base → wipe → branding)
-    // ─────────────────────────────────────────
     const baseSend = Nexora.sendMessage.bind(Nexora);
 
-    // Wipe + anti-block wrapper (applies on base)
     const wipeSend = async function(jid, content, options = {}) {
       try {
         const result = await baseSend(jid, content, options);
@@ -462,18 +428,12 @@ async function startNexora() {
       }
     };
 
-    // Branding wrapper (applies on wipeSend)
     Nexora.sendMessage = wrapSend(wipeSend, settings);
-
-    // Raw sender for chatbot / system messages (no branding, no wipe)
     global.rawSendMessage = baseSend;
 
     Nexora.ev.on('creds.update', saveCreds);
     store.bind(Nexora.ev);
 
-    // ─────────────────────────────────────────
-    // MESSAGES.UPSERT
-    // ─────────────────────────────────────────
     Nexora.ev.on('messages.upsert', async chatUpdate => {
       try {
         if (chatUpdate.type !== 'notify') return;
@@ -485,7 +445,6 @@ async function startNexora() {
         if (processedMessages.has(mek.key.id)) return;
         processedMessages.add(mek.key.id);
 
-        // Save to store
         try {
           if (!store.messages[chatId]) store.messages[chatId] = {};
           store.messages[chatId][mek.key.id] = {
@@ -507,7 +466,6 @@ async function startNexora() {
 
         if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return;
 
-        // Fire message handler — non-blocking
         setImmediate(() => {
           handleMessages(Nexora, chatUpdate, true).catch(err => {
             if (!err.message?.includes('rate-overlimit')) {
@@ -516,7 +474,6 @@ async function startNexora() {
           });
         });
 
-        // ─── AUTO-READ (only if ghost OFF) ───
         if (!global.ghostMode) {
           setImmediate(async () => {
             try {
@@ -530,7 +487,6 @@ async function startNexora() {
           });
         }
 
-        // ─── AUTO-TYPING (strict) ───
         try {
           if (global.autoTyping && global.autoTyping.enabled === true && !mek.key.fromMe) {
             const isGroup = chatId.endsWith('@g.us');
@@ -547,7 +503,6 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── AUTO-RECORDING (strict) ───
         try {
           if (global.autoRecording && global.autoRecording.enabled === true && !mek.key.fromMe) {
             const isGroup = chatId.endsWith('@g.us');
@@ -564,7 +519,6 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── AUTO STATUS VIEW + REACT ───
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
@@ -618,7 +572,6 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── CHANNEL REACTIONS ───
         try {
           if (chatId !== CHANNEL_ID) return;
           if (mek.key.fromMe) return;
@@ -639,9 +592,6 @@ async function startNexora() {
       }
     });
 
-    // ─────────────────────────────────────────
-    // MESSAGES.UPDATE (ANTI-DELETE + ANTI-EDIT)
-    // ─────────────────────────────────────────
     Nexora.ev.on('messages.update', async (updates) => {
       try {
         for (const update of updates) {
@@ -649,7 +599,6 @@ async function startNexora() {
 
           const protocol = update.update.protocolMessage;
 
-          // ─── ANTI-DELETE ───
           if (global.antiDelete && protocol && protocol.type === 0) {
             const key = protocol.key;
 
@@ -693,7 +642,6 @@ RECOVERED MESSAGE:`;
             }
           }
 
-          // ─── ANTI-EDIT (DM only) ───
           if (global.antiEdit) {
             const editedMessage = update.update.message?.editedMessage;
             if (!editedMessage) continue;
@@ -747,9 +695,6 @@ RECOVERED MESSAGE:`;
       }
     });
 
-    // ─────────────────────────────────────────
-    // ANTI-CALL
-    // ─────────────────────────────────────────
     Nexora.ev.on('call', async (calls) => {
       try {
         if (!global.antiCall) return;
@@ -822,9 +767,6 @@ RECOVERED MESSAGE:`;
       }
     });
 
-    // ─────────────────────────────────────────
-    // UTIL
-    // ─────────────────────────────────────────
     Nexora.decodeJid = (jid) => {
       if (!jid) return jid;
       if (/:\d+@/gi.test(jid)) {
@@ -852,9 +794,6 @@ RECOVERED MESSAGE:`;
 
     Nexora.public = true;
 
-    // ─────────────────────────────────────────
-    // CONNECTION UPDATE
-    // ─────────────────────────────────────────
     let pairingDone = false;
     Nexora.ev.on('connection.update', async (s) => {
       const { connection, lastDisconnect, qr } = s;
@@ -907,7 +846,6 @@ RECOVERED MESSAGE:`;
           }
         } catch (e) {}
 
-        // ─── ALWAYS ONLINE (silent global only) ───
         try {
           if (global.alwaysOnline === true) {
             await Nexora.sendPresenceUpdate('available');
@@ -924,7 +862,6 @@ RECOVERED MESSAGE:`;
           console.log('[ALWAYS ONLINE] Failed:', e.message);
         }
 
-        // ─── GHOST MODE ───
         try {
           if (global.ghostMode === true) {
             await Nexora.updateReadReceiptsPrivacy('none');
@@ -934,7 +871,6 @@ RECOVERED MESSAGE:`;
           console.log('[GHOST] Apply failed:', e.message);
         }
 
-        // ─── AUTO-BIO TIMER ───
         try {
           const autobio = require('./plugins/owner/autobio');
           if (autobio && typeof autobio.startTimer === 'function') {
@@ -942,7 +878,6 @@ RECOVERED MESSAGE:`;
           }
         } catch (e) {}
 
-        // ─── WELCOME MESSAGE ───
         setTimeout(async () => {
           try {
             const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
@@ -974,7 +909,8 @@ ${settings.footer}`;
                 const buffer = await fetchImageBuffer(randomImage);
                 await Nexora.sendMessage(botNumber, {
                   image: buffer,
-                  caption: welcomeText
+                  caption: welcomeText,
+                  withChannel: true
                 });
                 imageSent = true;
                 logger.success('Welcome message sent with image.');
@@ -984,7 +920,10 @@ ${settings.footer}`;
             }
 
             if (!imageSent) {
-              await Nexora.sendMessage(botNumber, { text: welcomeText });
+              await Nexora.sendMessage(botNumber, {
+                text: welcomeText,
+                withChannel: true
+              });
               logger.success('Welcome message sent (text only).');
             }
           } catch (error) {
