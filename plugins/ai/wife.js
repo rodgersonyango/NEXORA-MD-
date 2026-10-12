@@ -55,7 +55,7 @@ module.exports = {
       const res = await axios.get(API_URL, {
         params: {
           apiKey: API_KEY,
-          text
+          text: `${text}\n\n[Reply strictly in English only. Do not use any other language.]`
         },
         timeout: 45000,
         headers: { 'Accept': 'application/json' }
