@@ -75,14 +75,14 @@ const settings = {
 
   rateLimitPerMinute: 10,
 
-  antiDelete: true,
-  antiCall: true,
-  ghostMode: true,
-  autoTyping: true,
-  autoRead: true,
-  alwaysOnline: true,
+  antiDelete: false,
+  antiCall: false,
+  ghostMode: false,
+  autoTyping: false,
+  autoRead: false,
+  alwaysOnline: false,
   autoStatusSeen: true,
-  autoStatusReact: true,
+  autoStatusReact: false,
   autoChatBot: false,
 
   usePairingCode: true,
