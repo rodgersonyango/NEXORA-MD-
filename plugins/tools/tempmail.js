@@ -1,16 +1,14 @@
 /**
- * NEXORA MD - Temporary Mail
- * Generate a disposable email address
- * Usage:
- *   .tempmail          - generate a new temp email
- *   .temp <alias>      - alias
+ * NEXORA MD - Temporary Mail Generator
+ * Generates a disposable email address
+ * Usage: .tempmail
  */
 
 const settings = require('../../settings');
 const axios = require('axios');
 
-const API_URL = 'https://api.zanta-mini.store/api/tempmail/generate';
 const API_KEY = 'zanta_wfZEvdAaYG8BjA4ydc5avtPa';
+const GENERATE_URL = 'https://api.zanta-mini.store/api/tempmail/generate';
 
 module.exports = {
   name: 'tempmail',
@@ -24,7 +22,7 @@ module.exports = {
     try {
       await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
-      const res = await axios.get(API_URL, {
+      const res = await axios.get(GENERATE_URL, {
         params: { apiKey: API_KEY },
         timeout: 30000,
         headers: { 'Accept': 'application/json' }
@@ -42,7 +40,9 @@ module.exports = {
         text:
           `TEMPORARY EMAIL\n\n` +
           `Email: ${email}\n\n` +
-          `Use this for signups, verifications, or anything that needs a throwaway inbox.\n\n` +
+          `Use it for signups or verifications.\n` +
+          `Check the inbox with:\n` +
+          `  .checkmail ${email}\n\n` +
           `${settings.footer}`
       }, { quoted: mek });
 
