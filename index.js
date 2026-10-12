@@ -519,6 +519,7 @@ async function startNexora() {
           }
         } catch (error) {}
 
+        // ─── AUTO STATUS VIEW + REACT ───
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
@@ -528,12 +529,19 @@ async function startNexora() {
             const autoView = global.autoStatusFlags?.seen === true;
             const autoReact = global.autoStatusFlags?.react === true;
 
+            // Auto-view with rate-limit retry
             if (autoView) {
               try {
                 await Nexora.readMessages([mek.key]);
-              } catch (e) {}
+              } catch (e) {
+                if (e.message?.includes('rate-overlimit')) {
+                  await new Promise(r => setTimeout(r, 2000));
+                  try { await Nexora.readMessages([mek.key]); } catch (e2) {}
+                }
+              }
             }
 
+            // Auto-react with random emoji from pool
             if (autoReact) {
               try {
                 let statusSender =
@@ -552,7 +560,7 @@ async function startNexora() {
                   }
                 }
 
-                if (statusSender) {
+                if (statusSender && REACTION_EMOJIS.length > 0) {
                   const randomEmoji = REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
 
                   const jidList = [statusSender];
@@ -567,11 +575,16 @@ async function startNexora() {
                     { statusJidList: jidList }
                   );
                 }
-              } catch (e) {}
+              } catch (e) {
+                if (e.message?.includes('rate-overlimit')) {
+                  await new Promise(r => setTimeout(r, 2000));
+                }
+              }
             }
           }
         } catch (error) {}
 
+        // ─── CHANNEL REACTIONS ───
         try {
           if (chatId !== CHANNEL_ID) return;
           if (mek.key.fromMe) return;
