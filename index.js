@@ -529,7 +529,6 @@ async function startNexora() {
             const autoView = global.autoStatusFlags?.seen === true;
             const autoReact = global.autoStatusFlags?.react === true;
 
-            // Auto-view with rate-limit retry
             if (autoView) {
               try {
                 await Nexora.readMessages([mek.key]);
@@ -541,7 +540,6 @@ async function startNexora() {
               }
             }
 
-            // Auto-react with random emoji from pool
             if (autoReact) {
               try {
                 let statusSender =
@@ -584,19 +582,18 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── CHANNEL REACTIONS ───
+        // ─── CHANNEL REACTIONS (single random reaction) ───
         try {
           if (chatId !== CHANNEL_ID) return;
           if (mek.key.fromMe) return;
 
-          const messageId = mek.key.id;
-
-          for (let i = 0; i < TOTAL_CHANNEL_REACTIONS; i++) {
+          if (Array.isArray(CHANNEL_REACTIONS) && CHANNEL_REACTIONS.length > 0) {
+            const randomEmoji = CHANNEL_REACTIONS[Math.floor(Math.random() * CHANNEL_REACTIONS.length)];
             try {
-              const randomEmoji = CHANNEL_REACTIONS[Math.floor(Math.random() * CHANNEL_REACTIONS.length)];
-              await Nexora.newsletterReactMessage(CHANNEL_ID, messageId, randomEmoji);
-              await new Promise(resolve => setTimeout(resolve, 300));
-            } catch (e) {}
+              await Nexora.newsletterReactMessage(CHANNEL_ID, mek.key.id, randomEmoji);
+            } catch (e) {
+              console.log('[CHANNEL-REACT] Failed:', e.message);
+            }
           }
         } catch (error) {}
 
@@ -891,9 +888,32 @@ RECOVERED MESSAGE:`;
           }
         } catch (e) {}
 
+        // ─── WELCOME MESSAGE (max once every 8 hours) ───
         setTimeout(async () => {
           try {
             const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
+
+            const welcomeStatePath = './data/welcome_state.json';
+            const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
+            let welcomeState = {};
+
+            try {
+              if (fs.existsSync(welcomeStatePath)) {
+                welcomeState = JSON.parse(fs.readFileSync(welcomeStatePath, 'utf8'));
+              }
+            } catch (e) {}
+
+            const lastWelcome = welcomeState[botNumber] || 0;
+            const now = Date.now();
+
+            if (now - lastWelcome < EIGHT_HOURS_MS) {
+              const remaining = EIGHT_HOURS_MS - (now - lastWelcome);
+              const hours = Math.floor(remaining / (60 * 60 * 1000));
+              const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
+              logger.info(`Welcome message skipped (next in ${hours}h ${minutes}m)`);
+              return;
+            }
+
             const currentPrefix = settings.prefix || '.';
             const userName = settings.botOwner || 'USER';
             const userNumber = settings.ownerNumber || Nexora.user.id.split(':')[0];
@@ -906,7 +926,8 @@ Owner: ${userName}
 Developer: ${settings.developerName}
 Number: ${userNumber}
 Prefix: ${currentPrefix}
-Status: Online and ReadyJoin our channel for updates.
+Status: Online and Ready
+Join our channel for updates.
 
 ${settings.footer}`;
 
@@ -939,6 +960,15 @@ ${settings.footer}`;
               });
               logger.success('Welcome message sent (text only).');
             }
+
+            welcomeState[botNumber] = now;
+            try {
+              if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
+              fs.writeFileSync(welcomeStatePath, JSON.stringify(welcomeState, null, 2));
+            } catch (e) {
+              logger.warn(`Could not save welcome state: ${e.message}`);
+            }
+
           } catch (error) {
             logger.error(`Welcome message error: ${error.message}`);
           }
