@@ -4,89 +4,74 @@
 
 # 𝐍𝐄𝐗𝐎𝐑𝐀 𝐌𝐃
 
-**Advanced WhatsApp MD Bot. Powered by Rodgers.**
+**Advanced WhatsApp Automation Engine. Built by Rodgers.**
 
-[![Node](https://img.shields.io/badge/Node-18%2B-43853D?style=for-the-badge&logo=node.js&logoColor=white)](https://nodejs.org)
-[![Baileys](https://img.shields.io/badge/Baileys-6.7.9-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://github.com/WhiskeySockets/Baileys)
-[![License](https://img.shields.io/badge/License-MIT-blue?style=for-the-badge)](#)
+[![Node](https://img.shields.io/badge/Node.js-18%2B-000000?style=for-the-badge&logo=node.js)](#)
+[![Baileys](https://img.shields.io/badge/Baileys-6.7.9-000000?style=for-the-badge)](https://github.com/WhiskeySockets/Baileys)
+[![License](https://img.shields.io/badge/License-MIT-000000?style=for-the-badge)](#)
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=25D366&center=true&vCenter=true&width=600&lines=Welcome+to+NEXORA+MD;Fast.+Clean.+Powerful." alt="Typing"/>
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=20&pause=1000&color=00FF88&center=true&vCenter=true&width=600&lines=High-performance+WhatsApp+automation;Web+Pairing+%7C+Anti-Delete+%7C+Auto-Reactions;Deploy+Anywhere.+Run+Everywhere." alt="Typing"/>
 
 </div>
 
 ---
+
+## 🚀 Quick Access
 
 <div align="center">
 
-### 🔗 Pair Your Bot
-
-[![Pair Now](https://img.shields.io/badge/PAIR%20NOW-Open%20Pair%20Site-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)](https://nexora-md-pairsite.onrender.com)
-
-**https://nexora-md-pairsite.onrender.com**
+[![Pair Site](https://img.shields.io/badge/PAIR%20BOT-Open%20Pair%20Site-00FF88?style=for-the-badge&logo=whatsapp&logoColor=black)](https://nexora-md-pairsite.onrender.com)
+[![Portfolio](https://img.shields.io/badge/DEVELOPER-View%20Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://rodgers-mu.vercel.app)
 
 </div>
 
 ---
 
-## 📖 About
+## 📖 System Overview
 
-NEXORA MD is a fast and clean WhatsApp MD bot built on Baileys. It links to your WhatsApp as a device and gives you full command control over chats and groups.
+**NEXORA MD** is a high-performance WhatsApp automation engine built on the Baileys library. It operates as a linked device on your account, providing enterprise-grade features like web-based pairing, advanced security protocols (anti-delete, anti-edit), ghost mode, and robust community management tools.
 
----
-
-## 🚀 Deployment Hosts
-
-| Host | Platform | Free Tier |
-|---|---|---|
-| [Katabump](https://katabump.com) | Panel | Yes |
-| [Pterodactyl](https://pterodactyl.io) | Panel | Self-host |
-| [Render](https://render.com) | Cloud | Yes |
-| [Koyeb](https://koyeb.com) | Cloud | Yes |
-| [Railway](https://railway.app) | Cloud | Limited |
-| [Heroku](https://heroku.com) | Cloud | Limited |
-| [Termux](https://termux.dev) | Android | Yes |
-| [Local](https://nodejs.org) | PC / Mac / Linux | Yes |
-| [Docker](https://docker.com) | Container | Yes |
+Unlike standard bots, NEXORA MD is optimized for stability on low-resource hosts while delivering instant response times.
 
 ---
 
-## 👤 Owner
+## ⚡ Core Capabilities
 
-| | |
-|---|---|
-| **Name** | Rodgers Onyango |
-| **Role** | Developer & Owner |
-| **Location** | Kisumu, Kenya |
-| **GitHub** | [queenbellabots-cloud](https://github.com/queenbellabots-cloud) |
-| **Channel** | [Join Here](https://whatsapp.com/channel/0029VbCwZHACXC3PNHgtMT31) |
-| **Support** | [+254 755 660 053](https://wa.me/254755660053) |
-| **Email** | rogersonyango87@gmail.com |
-
----
-
-## 📊 Stats
-
-<div align="center">
-
-![GitHub Stars](https://img.shields.io/github/stars/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-![GitHub Forks](https://img.shields.io/github/forks/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-![GitHub Issues](https://img.shields.io/github/issues/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-![GitHub Last Commit](https://img.shields.io/github/last-commit/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-
-![Repo Size](https://img.shields.io/github/repo-size/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-![Code Size](https://img.shields.io/github/languages/code-size/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-![Contributors](https://img.shields.io/github/contributors/queenbellabots-cloud/NEXORA-MD-?style=for-the-badge&color=25D366)
-
-</div>
+| Feature | Description |
+| :--- | :--- |
+| **Web Pairing** | Generate session IDs directly from a browser. No terminal access required. |
+| **Security Protocols** | Anti-Delete, Anti-Edit, Anti-Block, and Anti-Call to protect your chats. |
+| **Ghost Mode** | Read and view statuses without triggering blue ticks or read receipts. |
+| **Automation** | Auto-view statuses, random emoji reactions, and channel auto-reacts. |
+| **Media Engine** | High-speed downloaders for TikTok, YouTube, and Movies. |
+| **AI Integration** | Built-in chatbot with fallback providers for continuous uptime. |
 
 ---
 
-<div align="center">
+## 🚀 Deployment Environment
 
-**NEXORA MD**
+NEXORA MD is designed to run on almost any environment.
 
-*Fast. Clean. Powerful.*
+| Host | Platform | Free Tier | Notes |
+| :--- | :--- | :--- | :--- |
+| [Katabump](https://katabump.com) | Panel | Yes | Recommended for beginners |
+| [Render](https://render.com) | Cloud | Yes | Use cron-job to prevent sleep |
+| [Koyeb](https://koyeb.com) | Cloud | Yes | Fast deployment |
+| [Railway](https://railway.app) | Cloud | Limited | Requires credit card |
+| [Termux](https://termux.dev) | Android | Yes | Local mobile hosting |
+| [VPS / Docker](https://docker.com) | Container | Self-host | Full control |
 
-<img src="https://capsule-render.vercel.app/api?type=waving&color=25D366&height=120&section=footer&text=Powered%20by%20Rodgers&fontSize=24&fontColor=ffffff" width="100%"/>
+---
 
-</div>
+## ⚙️ Configuration
+
+To run the bot, edit the `settings.js` file. It is separated into two sections:
+
+1. **Edit Zone:** Your number, session ID, pair site URL, and prefix.
+2. **System Zone:** Feature toggles, welcome images, channel IDs, and bot metadata.
+
+**Environment Variables (`.env`)**
+```env
+SESSION_ID=Nexora~xxxxx
+OWNER_NUMBER=2547XXXXXXXX
+PORT=3000
