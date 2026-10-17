@@ -1,8 +1,3 @@
-/**
- * NEXORA MD - Menu Command (Multi-Theme)
- * Renders menu in the current theme. Image fetched via axios buffer.
- */
-
 const settings = require('../../settings');
 const axios = require('axios');
 const ui = require('../../lib/ui');
@@ -119,12 +114,9 @@ function render1(info, categories, total, prefix) {
   t += `╠ Node: ${info.node}\n`;
   t += `╠ Commands: ${total}\n`;
   t += `╠ Time: ${info.time}\n`;
-
   for (const cat of Object.keys(categories).sort()) {
     t += `\n╔═══ [ ${cat} ] ═══╗\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `╠ ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `╠ ${prefix}${cmd}\n`;
     t += `╚═══════════════╝\n`;
   }
   t += `\n${settings.footer}`;
@@ -132,166 +124,72 @@ function render1(info, categories, total, prefix) {
 }
 
 function render2(info, categories, total, prefix) {
-  let t = `══════════════════════════\n`;
-  t += `     ${info.botName}\n`;
-  t += `     𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝚁𝚘𝚍𝚐𝚎𝚛𝚜\n`;
-  t += `══════════════════════════\n\n`;
-  t += `Owner      : ${info.owner}\n`;
-  t += `Prefix     : ${prefix}\n`;
-  t += `User       : ${info.user}\n`;
-  t += `Mode       : ${info.mode}\n`;
-  t += `Uptime     : ${info.uptime}\n`;
-  t += `RAM        : ${info.ram} MB\n`;
-  t += `Platform   : ${info.platform}\n`;
-  t += `Node       : ${info.node}\n`;
-  t += `Commands   : ${total}\n`;
-  t += `Time       : ${info.time}\n`;
-
+  let t = `══════════════════════════\n     ${info.botName}\n     𝙿𝚘𝚠𝚎𝚛𝚎𝚍 𝚋𝚢 𝚁𝚘𝚍𝚐𝚎𝚛𝚜\n══════════════════════════\n\n`;
+  t += `Owner      : ${info.owner}\nPrefix     : ${prefix}\nUser       : ${info.user}\nMode       : ${info.mode}\nUptime     : ${info.uptime}\nRAM        : ${info.ram} MB\nPlatform   : ${info.platform}\nNode       : ${info.node}\nCommands   : ${total}\nTime       : ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n──── ${cat} ────\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `  ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `  ${prefix}${cmd}\n`;
   }
   t += `\n${settings.footer}`;
   return t;
 }
 
 function render3(info, categories, total, prefix) {
-  let t = `${info.botName}\n─────────────\n\n`;
-  t += `Owner   ${info.owner}\n`;
-  t += `Prefix  ${prefix}\n`;
-  t += `User    ${info.user}\n`;
-  t += `Mode    ${info.mode}\n`;
-  t += `Uptime  ${info.uptime}\n`;
-  t += `RAM     ${info.ram} MB\n`;
-  t += `Node    ${info.node}\n`;
-  t += `Cmds    ${total}\n`;
-  t += `Time    ${info.time}\n`;
-
+  let t = `${info.botName}\n─────────────\n\nOwner   ${info.owner}\nPrefix  ${prefix}\nUser    ${info.user}\nMode    ${info.mode}\nUptime  ${info.uptime}\nRAM     ${info.ram} MB\nNode    ${info.node}\nCmds    ${total}\nTime    ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n${cat.toLowerCase()}\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `  ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `  ${prefix}${cmd}\n`;
   }
   t += `\n${settings.footer}`;
   return t;
 }
 
 function render4(info, categories, total, prefix) {
-  let t = `[ ${info.botName} ]\n=============\n\n`;
-  t += `[ Owner ] ${info.owner}\n`;
-  t += `[ Prefix ] ${prefix}\n`;
-  t += `[ User ] ${info.user}\n`;
-  t += `[ Mode ] ${info.mode}\n`;
-  t += `[ Uptime ] ${info.uptime}\n`;
-  t += `[ RAM ] ${info.ram} MB\n`;
-  t += `[ Platform ] ${info.platform}\n`;
-  t += `[ Node ] ${info.node}\n`;
-  t += `[ Commands ] ${total}\n`;
-  t += `[ Time ] ${info.time}\n`;
-
+  let t = `[ ${info.botName} ]\n=============\n\n[ Owner ] ${info.owner}\n[ Prefix ] ${prefix}\n[ User ] ${info.user}\n[ Mode ] ${info.mode}\n[ Uptime ] ${info.uptime}\n[ RAM ] ${info.ram} MB\n[ Platform ] ${info.platform}\n[ Node ] ${info.node}\n[ Commands ] ${total}\n[ Time ] ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n[ ${cat} ]\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `> ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `> ${prefix}${cmd}\n`;
   }
   t += `\n${settings.footer}`;
   return t;
 }
 
 function render5(info, categories, total, prefix) {
-  let t = `* ${info.botName} *\n* * * * * * *\n\n`;
-  t += `Owner: ${info.owner}\n`;
-  t += `Prefix: ${prefix}\n`;
-  t += `User: ${info.user}\n`;
-  t += `Mode: ${info.mode}\n`;
-  t += `Uptime: ${info.uptime}\n`;
-  t += `RAM: ${info.ram} MB\n`;
-  t += `Platform: ${info.platform}\n`;
-  t += `Node: ${info.node}\n`;
-  t += `Commands: ${total}\n`;
-  t += `Time: ${info.time}\n`;
-
+  let t = `* ${info.botName} *\n* * * * * * *\n\nOwner: ${info.owner}\nPrefix: ${prefix}\nUser: ${info.user}\nMode: ${info.mode}\nUptime: ${info.uptime}\nRAM: ${info.ram} MB\nPlatform: ${info.platform}\nNode: ${info.node}\nCommands: ${total}\nTime: ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n=== ${cat} ===\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `* ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `* ${prefix}${cmd}\n`;
   }
   t += `\n${settings.footer}`;
   return t;
 }
 
 function render6(info, categories, total, prefix) {
-  let t = `>> ${info.botName} <<\n----------------\n\n`;
-  t += `> Owner: ${info.owner}\n`;
-  t += `> Prefix: ${prefix}\n`;
-  t += `> User: ${info.user}\n`;
-  t += `> Mode: ${info.mode}\n`;
-  t += `> Uptime: ${info.uptime}\n`;
-  t += `> RAM: ${info.ram} MB\n`;
-  t += `> Platform: ${info.platform}\n`;
-  t += `> Node: ${info.node}\n`;
-  t += `> Commands: ${total}\n`;
-  t += `> Time: ${info.time}\n`;
-
+  let t = `>> ${info.botName} <<\n----------------\n\n> Owner: ${info.owner}\n> Prefix: ${prefix}\n> User: ${info.user}\n> Mode: ${info.mode}\n> Uptime: ${info.uptime}\n> RAM: ${info.ram} MB\n> Platform: ${info.platform}\n> Node: ${info.node}\n> Commands: ${total}\n> Time: ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n[ ${cat} ]\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `-> ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `-> ${prefix}${cmd}\n`;
   }
   t += `\n${settings.footer}`;
   return t;
 }
 
 function render7(info, categories, total, prefix) {
-  let t = `.....................\n   ${info.botName}\n.....................\n\n`;
-  t += `Owner . . . . ${info.owner}\n`;
-  t += `Prefix . . . . ${prefix}\n`;
-  t += `User . . . . ${info.user}\n`;
-  t += `Mode . . . . ${info.mode}\n`;
-  t += `Uptime . . . . ${info.uptime}\n`;
-  t += `RAM . . . . ${info.ram} MB\n`;
-  t += `Platform . . . . ${info.platform}\n`;
-  t += `Node . . . . ${info.node}\n`;
-  t += `Commands . . . . ${total}\n`;
-  t += `Time . . . . ${info.time}\n`;
-
+  let t = `.....................\n   ${info.botName}\n.....................\n\nOwner . . . . ${info.owner}\nPrefix . . . . ${prefix}\nUser . . . . ${info.user}\nMode . . . . ${info.mode}\nUptime . . . . ${info.uptime}\nRAM . . . . ${info.ram} MB\nPlatform . . . . ${info.platform}\nNode . . . . ${info.node}\nCommands . . . . ${total}\nTime . . . . ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n. . . . ${cat} . . . .\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `  ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `  ${prefix}${cmd}\n`;
   }
   t += `\n${settings.footer}`;
   return t;
 }
 
 function render8(info, categories, total, prefix) {
-  let t = `╔══════════════════════════╗\n`;
-  t += `║  ${info.botName}\n`;
-  t += `║  Premium Edition\n`;
-  t += `╚══════════════════════════╝\n\n`;
-  t += `» Owner    : ${info.owner}\n`;
-  t += `» Prefix   : ${prefix}\n`;
-  t += `» User     : ${info.user}\n`;
-  t += `» Mode     : ${info.mode}\n`;
-  t += `» Uptime   : ${info.uptime}\n`;
-  t += `» RAM      : ${info.ram} MB\n`;
-  t += `» Platform : ${info.platform}\n`;
-  t += `» Node     : ${info.node}\n`;
-  t += `» Commands : ${total}\n`;
-  t += `» Time     : ${info.time}\n`;
-
+  let t = `╔══════════════════════════╗\n║  ${info.botName}\n║  Premium Edition\n╚══════════════════════════╝\n\n`;
+  t += `» Owner    : ${info.owner}\n» Prefix   : ${prefix}\n» User     : ${info.user}\n» Mode     : ${info.mode}\n» Uptime   : ${info.uptime}\n» RAM      : ${info.ram} MB\n» Platform : ${info.platform}\n» Node     : ${info.node}\n» Commands : ${total}\n» Time     : ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n╔══ [ ${cat} ] ══╗\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `║ » ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `║ » ${prefix}${cmd}\n`;
     t += `╚══════════════════════════╝\n`;
   }
   t += `\n${settings.footer}`;
@@ -299,26 +197,11 @@ function render8(info, categories, total, prefix) {
 }
 
 function render9(info, categories, total, prefix) {
-  let t = `╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n`;
-  t += `┃ ◇ ${info.botName} ◇\n`;
-  t += `┃ Premium Edition\n`;
-  t += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
-  t += `◇ Owner    : ${info.owner}\n`;
-  t += `◇ Prefix   : ${prefix}\n`;
-  t += `◇ User     : ${info.user}\n`;
-  t += `◇ Mode     : ${info.mode}\n`;
-  t += `◇ Uptime   : ${info.uptime}\n`;
-  t += `◇ RAM      : ${info.ram} MB\n`;
-  t += `◇ Platform : ${info.platform}\n`;
-  t += `◇ Node     : ${info.node}\n`;
-  t += `◇ Commands : ${total}\n`;
-  t += `◇ Time     : ${info.time}\n`;
-
+  let t = `╭━━━━━━━━━━━━━━━━━━━━━━━━╮\n┃ ◇ ${info.botName} ◇\n┃ Premium Edition\n╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n\n`;
+  t += `◇ Owner    : ${info.owner}\n◇ Prefix   : ${prefix}\n◇ User     : ${info.user}\n◇ Mode     : ${info.mode}\n◇ Uptime   : ${info.uptime}\n◇ RAM      : ${info.ram} MB\n◇ Platform : ${info.platform}\n◇ Node     : ${info.node}\n◇ Commands : ${total}\n◇ Time     : ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n╭━━━◇ [ ${cat} ] ◇━━━╮\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `┃ ◇ ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `┃ ◇ ${prefix}${cmd}\n`;
     t += `╰━━━━━━━━━━━━━━━━━━━━━━━━╯\n`;
   }
   t += `\n${settings.footer}`;
@@ -326,34 +209,131 @@ function render9(info, categories, total, prefix) {
 }
 
 function render10(info, categories, total, prefix) {
-  let t = `░▒▓█ ${info.botName} █▓▒░\n`;
-  t += `░▒▓ Premium Edition ▓▒░\n`;
-  t += `══════════════════════════\n\n`;
-  t += `▪ Owner    : ${info.owner}\n`;
-  t += `▪ Prefix   : ${prefix}\n`;
-  t += `▪ User     : ${info.user}\n`;
-  t += `▪ Mode     : ${info.mode}\n`;
-  t += `▪ Uptime   : ${info.uptime}\n`;
-  t += `▪ RAM      : ${info.ram} MB\n`;
-  t += `▪ Platform : ${info.platform}\n`;
-  t += `▪ Node     : ${info.node}\n`;
-  t += `▪ Commands : ${total}\n`;
-  t += `▪ Time     : ${info.time}\n`;
-
+  let t = `░▒▓█ ${info.botName} █▓▒░\n░▒▓ Premium Edition ▓▒░\n══════════════════════════\n\n`;
+  t += `▪ Owner    : ${info.owner}\n▪ Prefix   : ${prefix}\n▪ User     : ${info.user}\n▪ Mode     : ${info.mode}\n▪ Uptime   : ${info.uptime}\n▪ RAM      : ${info.ram} MB\n▪ Platform : ${info.platform}\n▪ Node     : ${info.node}\n▪ Commands : ${total}\n▪ Time     : ${info.time}\n`;
   for (const cat of Object.keys(categories).sort()) {
     t += `\n░▒▓ ${cat} ▓▒░\n`;
-    for (const cmd of categories[cat].sort()) {
-      t += `▪ ${prefix}${cmd}\n`;
-    }
+    for (const cmd of categories[cat].sort()) t += `▪ ${prefix}${cmd}\n`;
   }
-  t += `\n══════════════════════════\n`;
+  t += `\n══════════════════════════\n${settings.footer}`;
+  return t;
+}
+
+function render11(info, categories, total, prefix) {
+  let t = `▎⚡ ${info.botName}\n▎\n▎👤 User: ${info.user}\n▎⚙️ Mode: ${info.mode}\n▎⏱️ Uptime: ${info.uptime}\n▎📦 Commands: ${total}\n▎\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `▎▼ [ ${cat} ]\n`;
+    for (const cmd of categories[cat].sort()) t += `▎ ├ ${prefix}${cmd}\n`;
+    t += `▎\n`;
+  }
+  t += `▎${settings.footer}`;
+  return t;
+}
+
+function render12(info, categories, total, prefix) {
+  let t = `┏━━━━━━━━━━━━━━━━━━━━━━━━┓\n┃   ⚡ ${info.botName} ⚡      ┃\n┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n\n`;
+  t += ` 👤 Owner : ${info.owner}\n ⚙️ Mode  : ${info.mode}\n ⏱️ Up    : ${info.uptime}\n 📦 Cmds  : ${total}\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n┏━━〔 ${cat} 〕━━┓\n`;
+    for (const cmd of categories[cat].sort()) t += `┃ ✦ ${prefix}${cmd}\n`;
+    t += `┗━━━━━━━━━━━━━━━━━━━━━━━━┛\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render13(info, categories, total, prefix) {
+  let t = `  ╭──────────────────────╮\n     ⚡ ${info.botName} ⚡\n  ╰──────────────────────╯\n  User   : ${info.user}\n  Mode   : ${info.mode}\n  Uptime : ${info.uptime}\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n  ─── ${cat} ───\n`;
+    for (const cmd of categories[cat].sort()) t += `  ▸ ${prefix}${cmd}\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render14(info, categories, total, prefix) {
+  let t = `▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\n  ⚡ ${info.botName} ⚡\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\n  USER   › ${info.user}\n  MODE   › ${info.mode}\n  UPTIME › ${info.uptime}\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n▀▀▀ [ ${cat} ] ▀▀▀▀▀▀▀▀▀▀▀▀▀\n`;
+    for (const cmd of categories[cat].sort()) t += `  ➜ ${prefix}${cmd}\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render15(info, categories, total, prefix) {
+  let t = `[ SYS: ${info.botName} ]\n> USER : ${info.user}\n> MODE : ${info.mode}\n> CMD  : ${total}\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n< ${cat} >\n`;
+    for (const cmd of categories[cat].sort()) t += `  » ${prefix}${cmd}\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render16(info, categories, total, prefix) {
+  let t = `╭───────────── ✦ ─────────────╮\n   ⚡ ${info.botName} ⚡\n╰───────────── ✦ ─────────────╯\n\n`;
+  t += `  ╭─ Info ───────────────────╮\n  │ User : ${info.user.padEnd(17)} │\n  │ Mode : ${info.mode.padEnd(17)} │\n  ╰─────────────────────────╯\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n  ╭─ ${cat} ─────────────────╮\n`;
+    for (const cmd of categories[cat].sort()) t += `  │ • ${(prefix + cmd).padEnd(23)} │\n`;
+    t += `  ╰─────────────────────────╯\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render17(info, categories, total, prefix) {
+  let t = `█▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀█\n█   ⚡ ${info.botName} ⚡   █\n█▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄█\n\n`;
+  t += `  ╭─ SYSTEM STATUS ──────────────────╮\n  │ OWNER    : ${info.owner.padEnd(20)} │\n  │ MODE     : ${info.mode.padEnd(20)} │\n  │ UPTIME   : ${info.uptime.padEnd(20)} │\n  │ MEMORY   : ${(info.ram + ' MB').padEnd(20)} │\n  ╰──────────────────────────────────╯\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n  ┏━ [ ${cat} ]\n`;
+    for (const cmd of categories[cat].sort()) t += `  ┃  › ${prefix}${cmd}\n`;
+    t += `  ┗━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render18(info, categories, total, prefix) {
+  let t = `⚡ ${info.botName}\n──────────────────────────────────────\nUSER   : ${info.user}\nMODE   : ${info.mode}\nUPTIME : ${info.uptime}\n──────────────────────────────────────\n\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `┃ ${cat}\n`;
+    for (const cmd of categories[cat].sort()) t += `┃    ├─ ${prefix}${cmd}\n`;
+    t += `┃\n`;
+  }
   t += `${settings.footer}`;
+  return t;
+}
+
+function render19(info, categories, total, prefix) {
+  let t = `▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀\n ▌ ⚡ ${info.botName} ⚡\n▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄\n\n`;
+  t += ` ▌ User    ║ ${info.user}\n ▌ Mode    ║ ${info.mode}\n ▌ Uptime  ║ ${info.uptime}\n ▌ Commands║ ${total}\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n ▌ ▸ [ ${cat} ]\n`;
+    for (const cmd of categories[cat].sort()) t += ` ▌   └─ ${prefix}${cmd}\n`;
+  }
+  t += `\n${settings.footer}`;
+  return t;
+}
+
+function render20(info, categories, total, prefix) {
+  let t = `✦ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✦\n       ⚡ ${info.botName} ⚡\n✦ ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ ✦\n\n`;
+  t += ` 〘 USER 〙 ${info.user}\n 〘 MODE 〙 ${info.mode}\n 〘 TIME 〙 ${info.uptime}\n`;
+  for (const cat of Object.keys(categories).sort()) {
+    t += `\n  ${cat}\n  ┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄\n`;
+    for (const cmd of categories[cat].sort()) t += `   ⚡ ${prefix}${cmd}\n`;
+  }
+  t += `\n${settings.footer}`;
   return t;
 }
 
 const RENDERERS = {
   1: render1, 2: render2, 3: render3, 4: render4, 5: render5,
-  6: render6, 7: render7, 8: render8, 9: render9, 10: render10
+  6: render6, 7: render7, 8: render8, 9: render9, 10: render10,
+  11: render11, 12: render12, 13: render13, 14: render14, 15: render15,
+  16: render16, 17: render17, 18: render18, 19: render19, 20: render20
 };
 
 module.exports = {
@@ -375,14 +355,14 @@ module.exports = {
     const { categories, total } = buildCategories();
     const prefix = settings.prefix || '.';
 
-    let themeNum = 1;
+    let themeNum = 8;
     try {
       themeNum = ui.getTheme();
     } catch (e) {
       console.log('[MENU] Theme read failed:', e.message);
     }
 
-    const renderer = RENDERERS[themeNum] || RENDERERS[1];
+    const renderer = RENDERERS[themeNum] || RENDERERS[8];
     let menuText = '';
     try {
       menuText = renderer(info, categories, total, prefix);
@@ -393,8 +373,16 @@ module.exports = {
 
     let themeImage = null;
     try {
-      if (settings.menuThemes && settings.menuThemes[themeNum] && settings.menuThemes[themeNum].image) {
-        themeImage = settings.menuThemes[themeNum].image;
+      if (settings.menuThemes) {
+        if (themeNum > 10 || !settings.menuThemes[themeNum]) {
+          const availableThemes = Object.keys(settings.menuThemes).filter(k => settings.menuThemes[k].image);
+          if (availableThemes.length > 0) {
+            const randomTheme = availableThemes[Math.floor(Math.random() * availableThemes.length)];
+            themeImage = settings.menuThemes[randomTheme].image;
+          }
+        } else {
+          themeImage = settings.menuThemes[themeNum].image;
+        }
       }
     } catch (e) {}
 
