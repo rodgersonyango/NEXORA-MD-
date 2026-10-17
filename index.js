@@ -61,6 +61,7 @@ global.botMode = mode.getMode(settings.mode || 'public');
 global.autoWipeSeconds = 0;
 global.commands = new Map();
 global.autoReadPM = false;
+global.hasSentWelcome = false; // In-memory lock for welcome message
 
 try {
   if (fs.existsSync('./data/antidelete.json')) {
@@ -582,7 +583,7 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── CHANNEL REACTIONS (single random reaction) ───
+        // ─── CHANNEL REACTIONS ───
         try {
           if (chatId !== CHANNEL_ID) return;
           if (mek.key.fromMe) return;
@@ -888,29 +889,21 @@ RECOVERED MESSAGE:`;
           }
         } catch (e) {}
 
-        // ─── WELCOME MESSAGE (max once every 8 hours) ───
+        // ─── WELCOME MESSAGE (ONCE ONLY) ───
         setTimeout(async () => {
           try {
             const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
-
-            const welcomeStatePath = './data/welcome_state.json';
-            const EIGHT_HOURS_MS = 8 * 60 * 60 * 1000;
-            let welcomeState = {};
-
+            const welcomedPath = './data/welcomed.json';
+            let welcomedData = {};
+            
             try {
-              if (fs.existsSync(welcomeStatePath)) {
-                welcomeState = JSON.parse(fs.readFileSync(welcomeStatePath, 'utf8'));
+              if (fs.existsSync(welcomedPath)) {
+                welcomedData = JSON.parse(fs.readFileSync(welcomedPath, 'utf8'));
               }
             } catch (e) {}
 
-            const lastWelcome = welcomeState[botNumber] || 0;
-            const now = Date.now();
-
-            if (now - lastWelcome < EIGHT_HOURS_MS) {
-              const remaining = EIGHT_HOURS_MS - (now - lastWelcome);
-              const hours = Math.floor(remaining / (60 * 60 * 1000));
-              const minutes = Math.floor((remaining % (60 * 60 * 1000)) / (60 * 1000));
-              logger.info(`Welcome message skipped (next in ${hours}h ${minutes}m)`);
+            // If already sent OR global lock is active, abort
+            if (global.hasSentWelcome || welcomedData[botNumber]) {
               return;
             }
 
@@ -961,18 +954,18 @@ ${settings.footer}`;
               logger.success('Welcome message sent (text only).');
             }
 
-            welcomeState[botNumber] = now;
+            // LOCK IT PERMANENTLY
+            global.hasSentWelcome = true;
+            welcomedData[botNumber] = true;
             try {
               if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
-              fs.writeFileSync(welcomeStatePath, JSON.stringify(welcomeState, null, 2));
-            } catch (e) {
-              logger.warn(`Could not save welcome state: ${e.message}`);
-            }
+              fs.writeFileSync(welcomedPath, JSON.stringify(welcomedData, null, 2));
+            } catch (e) {}
 
           } catch (error) {
             logger.error(`Welcome message error: ${error.message}`);
           }
-        }, 3000);
+        }, 5000); // 5-second delay to ensure connection is stable
       }
 
       if (connection === 'close') {
