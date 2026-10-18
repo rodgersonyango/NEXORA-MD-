@@ -67,7 +67,7 @@ module.exports = {
       }
 
       text += `━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
-      text += `Powered by Omegatech | ${settings.footer}`;
+      text += `©2026 | ${settings.footer}`;
 
       await conn.sendMessage(chatId, { text }, { quoted: mek });
       await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
