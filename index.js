@@ -61,7 +61,7 @@ global.botMode = mode.getMode(settings.mode || 'public');
 global.autoWipeSeconds = 0;
 global.commands = new Map();
 global.autoReadPM = false;
-global.hasSentWelcome = false; // In-memory lock for welcome message
+global.hasSentWelcome = false;
 
 try {
   if (fs.existsSync('./data/antidelete.json')) {
@@ -533,6 +533,30 @@ async function startNexora() {
             if (autoView) {
               try {
                 await Nexora.readMessages([mek.key]);
+
+                // ═══ COUNT STATUS VIEWS ═══
+                const DATA_PATH = path.join(process.cwd(), 'data', 'status_views.json');
+                const today = new Date().toLocaleDateString('en-GB', { timeZone: settings.timeZone || 'Africa/Nairobi' });
+
+                let viewsData = { date: today, count: 0 };
+                try {
+                  if (fs.existsSync(DATA_PATH)) {
+                    viewsData = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+                  }
+                } catch (e) {}
+
+                if (viewsData.date !== today) {
+                  viewsData.date = today;
+                  viewsData.count = 0;
+                }
+                viewsData.count += 1;
+
+                try {
+                  if (!fs.existsSync(path.dirname(DATA_PATH))) fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
+                  fs.writeFileSync(DATA_PATH, JSON.stringify(viewsData, null, 2));
+                } catch (e) {}
+                // ═══ END COUNT CODE ═══
+
               } catch (e) {
                 if (e.message?.includes('rate-overlimit')) {
                   await new Promise(r => setTimeout(r, 2000));
@@ -895,14 +919,13 @@ RECOVERED MESSAGE:`;
             const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
             const welcomedPath = './data/welcomed.json';
             let welcomedData = {};
-            
+
             try {
               if (fs.existsSync(welcomedPath)) {
                 welcomedData = JSON.parse(fs.readFileSync(welcomedPath, 'utf8'));
               }
             } catch (e) {}
 
-            // If already sent OR global lock is active, abort
             if (global.hasSentWelcome || welcomedData[botNumber]) {
               return;
             }
@@ -954,7 +977,6 @@ ${settings.footer}`;
               logger.success('Welcome message sent (text only).');
             }
 
-            // LOCK IT PERMANENTLY
             global.hasSentWelcome = true;
             welcomedData[botNumber] = true;
             try {
@@ -965,7 +987,7 @@ ${settings.footer}`;
           } catch (error) {
             logger.error(`Welcome message error: ${error.message}`);
           }
-        }, 5000); // 5-second delay to ensure connection is stable
+        }, 5000);
       }
 
       if (connection === 'close') {
