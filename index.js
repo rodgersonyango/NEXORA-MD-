@@ -40,6 +40,7 @@ const mode = require('./lib/mode');
 const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
+const { proto } = require('@whiskeysockets/baileys');
 
 const {
   default: makeWASocket,
@@ -62,6 +63,7 @@ global.autoWipeSeconds = 0;
 global.commands = new Map();
 global.autoReadPM = false;
 global.hasSentWelcome = false;
+global.completeMessageCache = new Map();
 
 try {
   if (fs.existsSync('./data/antidelete.json')) {
@@ -261,12 +263,18 @@ function loadCommands() {
     try {
       delete require.cache[require.resolve(filePath)];
       const command = require(filePath);
-      if (command && command.name && typeof command.execute === 'function') {
-        global.commands.set(command.name.toLowerCase(), command);
-        if (Array.isArray(command.aliases)) {
-          command.aliases.forEach(a => global.commands.set(a.toLowerCase(), command));
+      
+      // Support arrays of commands (like our events file)
+      const cmds = Array.isArray(command) ? command : [command];
+      
+      for (const cmd of cmds) {
+        if (cmd && cmd.name && typeof cmd.execute === 'function') {
+          global.commands.set(cmd.name.toLowerCase(), cmd);
+          if (Array.isArray(cmd.aliases)) {
+            cmd.aliases.forEach(a => global.commands.set(a.toLowerCase(), cmd));
+          }
+          loaded++;
         }
-        loaded++;
       }
     } catch (error) {
       logger.error(`Failed to load ${path.basename(filePath)}: ${error.message}`);
@@ -374,6 +382,24 @@ async function startNexora() {
 
     const baseSend = Nexora.sendMessage.bind(Nexora);
 
+    const _origRelayMessage = Nexora.relayMessage.bind(Nexora);
+    Nexora.relayMessage = async (jid, message, options = {}) => {
+      const result = await _origRelayMessage(jid, message, options);
+      try {
+        const messageId = options.messageId || result;
+        if (jid && messageId && typeof messageId === 'string') {
+          let rawBytes;
+          try { rawBytes = Buffer.from(proto.Message.encode(message).finish()); } 
+          catch { rawBytes = Buffer.from(proto.Message.encode(proto.Message.fromObject(message)).finish()); }
+          global.completeMessageCache.set(`${jid}:${messageId}`, rawBytes);
+          while (global.completeMessageCache.size > 1000) {
+            global.completeMessageCache.delete(global.completeMessageCache.keys().next().value);
+          }
+        }
+      } catch (e) { console.log('[OUTGOING CACHE ERROR]', e.message); }
+      return result;
+    };
+
     const wipeSend = async function(jid, content, options = {}) {
       try {
         const result = await baseSend(jid, content, options);
@@ -440,6 +466,20 @@ async function startNexora() {
         if (chatUpdate.type !== 'notify') return;
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
+
+        try {
+          if (mek?.key?.remoteJid && mek?.key?.id && mek?.message) {
+            const cacheKey = `${mek.key.remoteJid}:${mek.key.id}`;
+            const rawMessage = proto.Message.fromObject(mek.message);
+            const rawBytes = Buffer.from(proto.Message.encode(rawMessage).finish());
+            global.completeMessageCache.set(cacheKey, rawBytes);
+            while (global.completeMessageCache.size > 1000) {
+              global.completeMessageCache.delete(global.completeMessageCache.keys().next().value);
+            }
+          }
+        } catch (cacheError) {
+          console.error('[COMPLETE MESSAGE CACHE ERROR]', cacheError.message);
+        }
 
         const chatId = mek.key.remoteJid;
         if (!chatId || isSystemJid(chatId)) return;
@@ -520,7 +560,7 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── AUTO STATUS VIEW + REACT ───
+        // ─── AUTO STATUS VIEW + REACT + VIEW COUNTER ───
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
@@ -533,30 +573,25 @@ async function startNexora() {
             if (autoView) {
               try {
                 await Nexora.readMessages([mek.key]);
-
-                // ═══ COUNT STATUS VIEWS ═══
+                
                 const DATA_PATH = path.join(process.cwd(), 'data', 'status_views.json');
                 const today = new Date().toLocaleDateString('en-GB', { timeZone: settings.timeZone || 'Africa/Nairobi' });
-
                 let viewsData = { date: today, count: 0 };
                 try {
                   if (fs.existsSync(DATA_PATH)) {
                     viewsData = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
                   }
                 } catch (e) {}
-
                 if (viewsData.date !== today) {
                   viewsData.date = today;
                   viewsData.count = 0;
                 }
                 viewsData.count += 1;
-
                 try {
                   if (!fs.existsSync(path.dirname(DATA_PATH))) fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
                   fs.writeFileSync(DATA_PATH, JSON.stringify(viewsData, null, 2));
                 } catch (e) {}
-                // ═══ END COUNT CODE ═══
-
+                
               } catch (e) {
                 if (e.message?.includes('rate-overlimit')) {
                   await new Promise(r => setTimeout(r, 2000));
@@ -567,10 +602,7 @@ async function startNexora() {
 
             if (autoReact) {
               try {
-                let statusSender =
-                  mek.key.participant ||
-                  mek.participant ||
-                  null;
+                let statusSender = mek.key.participant || mek.participant || null;
 
                 if (!statusSender && mek.message) {
                   const msgKeys = Object.keys(mek.message || {});
@@ -659,18 +691,27 @@ Time: ${new Date().toLocaleString()}
 
 RECOVERED MESSAGE:`;
 
-            const ownerJid = (owner.getPairedNumber() || settings.ownerNumber) + '@s.whatsapp.net';
+            let destCfg = 'dm';
+            try {
+              const adPath = './data/antidelete_config.json';
+              if (fs.existsSync(adPath)) {
+                const c = JSON.parse(fs.readFileSync(adPath, 'utf8'));
+                if (c.dest === 'group') destCfg = 'group';
+              }
+            } catch (e) {}
 
-            await Nexora.sendMessage(ownerJid, {
+            const targetJid = destCfg === 'group' ? key.remoteJid : (owner.getPairedNumber() || settings.ownerNumber) + '@s.whatsapp.net';
+
+            await Nexora.sendMessage(targetJid, {
               text: caption,
               mentions: [sender]
             });
 
             try {
-              await Nexora.copyNForward(ownerJid, originalMsg, true);
+              await Nexora.copyNForward(targetJid, originalMsg, true);
             } catch (forwardError) {
               if (originalMsg.message?.conversation) {
-                await Nexora.sendMessage(ownerJid, {
+                await Nexora.sendMessage(targetJid, {
                   text: `Recovered Text:\n${originalMsg.message.conversation}`
                 });
               }
@@ -727,6 +768,30 @@ RECOVERED MESSAGE:`;
         }
       } catch (error) {
         logger.error(`messages.update: ${error.message}`);
+      }
+    });
+
+    // ANTI-PROMOTE / ANTI-DEMOTE HOOK
+    Nexora.ev.on('groups.update', async (updates) => {
+      for (const update of updates) {
+        if (update.action === 'promote' || update.action === 'demote') {
+          try {
+            const dataPath = path.join(process.cwd(), 'data', 'group_events.json');
+            let cfg = {};
+            if (fs.existsSync(dataPath)) cfg = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+            
+            const groupCfg = cfg[update.id] || {};
+            const isPromote = update.action === 'promote';
+            
+            if ((isPromote && groupCfg.antipromote) || (!isPromote && groupCfg.antidemote)) {
+              const actor = update.author;
+              if (actor && actor !== Nexora.user.id.split(':')[0] + '@s.whatsapp.net') {
+                await Nexora.groupParticipantsUpdate(update.id, [actor], 'demote');
+                await Nexora.sendMessage(update.id, { text: `Unauthorized admin change detected. Action reverted.\n\n${settings.footer}` });
+              }
+            }
+          } catch (e) {}
+        }
       }
     });
 
@@ -882,6 +947,14 @@ RECOVERED MESSAGE:`;
         } catch (e) {}
 
         try {
+          const { startAntiMuteEngine } = require('./plugins/group/antimute-engine');
+          startAntiMuteEngine(Nexora);
+          logger.success('Auto-Mute Engine started.');
+        } catch (e) {
+          console.log('[ANTIMUTE] Failed to start engine:', e.message);
+        }
+
+        try {
           if (global.alwaysOnline === true) {
             await Nexora.sendPresenceUpdate('available');
 
@@ -913,7 +986,6 @@ RECOVERED MESSAGE:`;
           }
         } catch (e) {}
 
-        // ─── WELCOME MESSAGE (ONCE ONLY) ───
         setTimeout(async () => {
           try {
             const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
