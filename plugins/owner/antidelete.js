@@ -1,117 +1,122 @@
-/**
- * NEXORA MD - Anti-Delete Toggle
- * Owner-only command to enable/disable anti-delete protection
- */
-
-const fs = require('fs');
 const settings = require('../../settings');
+const fs = require('fs');
+const path = require('path');
 
-const dataPath = './data/antidelete.json';
+const DATA_PATH = path.join(__dirname, '..', '..', 'data', 'antidelete_config.json');
 
-if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
-
-function readStore() {
+function readConfig() {
   try {
-    if (fs.existsSync(dataPath)) {
-      return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+    if (fs.existsSync(DATA_PATH)) {
+      return JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
     }
   } catch (e) {}
-  return { enabled: settings.antiDelete !== false };
+  return {
+    enabled: settings.antiDelete !== false,
+    dest: 'dm' // default is sending to DM
+  };
 }
 
-function writeStore(data) {
+function writeConfig(cfg) {
   try {
-    fs.writeFileSync(dataPath, JSON.stringify(data, null, 2));
-  } catch (e) {
-    console.log('[ANTIDELETE] Write failed:', e.message);
-  }
-}
-
-function applyState(enabled) {
-  global.antiDelete = enabled;
+    const dir = path.dirname(DATA_PATH);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(DATA_PATH, JSON.stringify(cfg, null, 2));
+  } catch (e) {}
 }
 
 module.exports = {
   name: 'antidelete',
-  aliases: ['ad', 'antidel'],
+  aliases: ['ad'],
   category: 'owner',
-  description: 'Enable or disable anti-delete protection',
-  usage: '.antidelete on | .antidelete off',
+  description: 'Configure anti-delete settings',
+  usage: '.antidelete',
   ownerOnly: true,
-  react: '✅',
+  react: '🛡️',
 
   async execute(conn, mek, args, chatId, isOwner) {
     try {
       if (!isOwner) {
         await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-        return;
+        return conn.sendMessage(chatId, {
+          text: `Access Denied. This command is for the Owner only.\n\n${settings.footer}`
+        }, { quoted: mek });
       }
 
-      const store = readStore();
-      const choice = (args[0] || '').toLowerCase();
+      const cfg = readConfig();
+      const sub = (args[0] || '').toLowerCase();
 
-      // ─────────────────────────────────────────
-      // ON
-      // ─────────────────────────────────────────
-      if (choice === 'on') {
-        store.enabled = true;
-        writeStore(store);
-        applyState(true);
-
-        await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-        await conn.sendMessage(chatId, {
+      // Help Menu
+      if (!sub) {
+        return conn.sendMessage(chatId, {
           text:
-            `ANTI-DELETE ENABLED\n\n` +
-            `Deleted messages will be recovered and sent to your DM.\n\n` +
+            `ANTI-DELETE SETTINGS\n\n` +
+            `Current State: ${cfg.enabled ? 'ENABLED' : 'DISABLED'}\n` +
+            `Destination: ${cfg.dest === 'group' ? 'GROUP' : 'DM (PRIVATE)'}\n\n` +
+            `Usage:\n` +
+            `  .antidelete on        Enable system\n` +
+            `  .antidelete off       Disable system\n` +
+            `  .antidelete set dm    Send deleted items to Owner DM\n` +
+            `  .antidelete set group Restore items back to the Group\n\n` +
             `${settings.footer}`
-        });
-        return;
+        }, { quoted: mek });
       }
 
-      // ─────────────────────────────────────────
-      // OFF
-      // ─────────────────────────────────────────
-      if (choice === 'off') {
-        store.enabled = false;
-        writeStore(store);
-        applyState(false);
-
+      if (sub === 'on') {
+        cfg.enabled = true;
+        writeConfig(cfg);
+        // Update global variable so bot respects it instantly
+        global.antiDelete = true;
+        
         await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-        await conn.sendMessage(chatId, {
-          text:
-            `ANTI-DELETE DISABLED\n\n` +
-            `Deleted messages will no longer be recovered.\n\n` +
-            `${settings.footer}`
-        });
-        return;
+        return conn.sendMessage(chatId, {
+          text: `Anti-delete system is now ENABLED.\n\n${settings.footer}`
+        }, { quoted: mek });
       }
 
-      // ─────────────────────────────────────────
-      // STATUS
-      // ─────────────────────────────────────────
-      const current = store.enabled ? 'ENABLED' : 'DISABLED';
+      if (sub === 'off') {
+        cfg.enabled = false;
+        writeConfig(cfg);
+        // Update global variable instantly
+        global.antiDelete = false;
+        
+        await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
+        return conn.sendMessage(chatId, {
+          text: `Anti-delete system is now DISABLED.\n\n${settings.footer}`
+        }, { quoted: mek });
+      }
 
-      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
+      if (sub === 'set' && args[1]) {
+        const mode = args[1].toLowerCase();
+        if (mode === 'dm') {
+          cfg.dest = 'dm';
+          writeConfig(cfg);
+          await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
+          return conn.sendMessage(chatId, {
+            text: `Logs will now be sent to your Private DM.\n\n${settings.footer}`
+          }, { quoted: mek });
+        } 
+        
+        if (mode === 'group') {
+          cfg.dest = 'group';
+          writeConfig(cfg);
+          await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
+          return conn.sendMessage(chatId, {
+            text: `Logs will now be restored back to the Group.\n\n${settings.footer}`
+          }, { quoted: mek });
+        }
+      }
+
+      await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
       await conn.sendMessage(chatId, {
-        text:
-          `ANTI-DELETE PROTECTION\n\n` +
-          `Status: ${current}\n\n` +
-          `Usage:\n` +
-          `  ${settings.prefix || '.'}antidelete on   - enable\n` +
-          `  ${settings.prefix || '.'}antidelete off  - disable\n\n` +
-          `${settings.footer}`
-      });
+        text: `Invalid command. Type .antidelete for help.\n\n${settings.footer}`
+      }, { quoted: mek });
 
     } catch (error) {
-      console.log('[ANTIDELETE] Error:', error.message);
-      try {
-        await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-      } catch (e) {}
-      try {
-        await conn.sendMessage(chatId, {
-          text: `Error: ${error.message}\n\n${settings.footer}`
-        });
-      } catch (e) {}
+      console.log('[ANTIDELETE-CMD] Error:', error.message);
+      try { await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } }); } catch (e) {}
+      await conn.sendMessage(chatId, {
+        text: `Error: ${error.message}\n\n${settings.footer}`
+      }, { quoted: mek });
     }
   }
 };
