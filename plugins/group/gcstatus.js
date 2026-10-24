@@ -28,7 +28,6 @@ module.exports = {
       if (type === 'text') {
         if (!content) throw new Error('Please provide a message for the text status.');
         
-        // Native group status function from blacklord-socket
         await conn.sendGroupStatus(chatId, { text: content });
         
       } else if (type === 'image' || type === 'video') {
@@ -47,7 +46,6 @@ module.exports = {
           ? { image: buffer, caption: content } 
           : { video: buffer, caption: content };
           
-        // Native group status function for media
         await conn.sendGroupStatus(chatId, mediaInput);
       }
 
