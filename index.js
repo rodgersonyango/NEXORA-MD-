@@ -42,7 +42,6 @@ const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
 
-// Anti-Ban Libraries
 const { proto } = require('@whiskeysockets/baileys');
 
 const {
@@ -68,15 +67,11 @@ global.autoReadPM = false;
 global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
 
-// ═══════════════════════════════════════════════════════════════
-// ANTI-BAN PROTOCOL STATE
-// ═══════════════════════════════════════════════════════════════
 global.msgCounter = 0;
 global.lastMsgReset = Date.now();
 global.lastSentMsg = "";
 global.spamCount = 0;
 
-// Load configs
 try {
   if (fs.existsSync('./data/antidelete.json')) {
     const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
@@ -279,7 +274,6 @@ async function startNexora() {
 
     const baseSend = Nexora.sendMessage.bind(Nexora);
 
-    // OUTGOING CACHE FOR GETCODE/TRY
     const _origRelayMessage = Nexora.relayMessage.bind(Nexora);
     Nexora.relayMessage = async (jid, message, options = {}) => {
       const result = await _origRelayMessage(jid, message, options);
@@ -296,12 +290,8 @@ async function startNexora() {
       return result;
     };
 
-    // ═══════════════════════════════════════════════════════════════
-    // ANTI-BAN WRAPPER (Rate Limits + Jitter Delays + Media Buffers)
-    // ═══════════════════════════════════════════════════════════════
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        // 1. Rate Limit Check (15 msgs per minute)
         if (Date.now() - global.lastMsgReset > 60000) {
           global.msgCounter = 0;
           global.lastMsgReset = Date.now();
@@ -313,7 +303,6 @@ async function startNexora() {
           global.lastMsgReset = Date.now();
         }
 
-        // 2. Spam Detection (Same message to 3 people)
         if (content?.text && content.text === global.lastSentMsg) {
           global.spamCount++;
           if (global.spamCount > 3) {
@@ -326,14 +315,12 @@ async function startNexora() {
           global.spamCount = 0;
         }
 
-        // 3. Human-like Jitter Delay (250ms - 750ms)
         if (!content?.react && !content?.delete) {
           const jitter = Math.floor(Math.random() * 500) + 250;
           await new Promise(r => setTimeout(r, jitter));
           global.msgCounter++;
         }
 
-        // 4. Convert URLs to buffers for media to avoid "suspicious link" bans
         if (content?.image?.url) {
           try {
             const buf = await fetchImageBuffer(content.image.url);
@@ -347,7 +334,6 @@ async function startNexora() {
           } catch (e) {}
         }
 
-        // 5. Auto-Wipe Logic
         const result = await baseSend(jid, content, options);
 
         if (global.autoWipeSeconds > 0 && result?.key && !content?.delete && !content?.react && !content?.protocolMessage) {
@@ -358,7 +344,6 @@ async function startNexora() {
 
         return result;
       } catch (err) {
-        // 6. Strict Ban Detection
         if (err.message && (err.message.includes('forbidden') || err.message.includes('unauthorized') || err.message.includes('not-authorized'))) {
           logger.error(`[BAN DETECTED] The bot is blocked or banned!`);
           if (global.antiBlock) {
@@ -448,7 +433,6 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── AUTO STATUS VIEW + REACT + VIEW COUNTER ───
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
@@ -495,7 +479,6 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        // ─── CHANNEL REACTIONS ───
         try {
           if (chatId !== CHANNEL_ID) return;
           if (mek.key.fromMe) return;
@@ -692,7 +675,6 @@ async function startNexora() {
       if (connection === 'close') {
         const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
         
-        // 7. Strict Ban Check: If 401/403, do not reconnect to avoid permanent ban
         if (statusCode === 401 || statusCode === 403) {
           logger.error(`[FATAL] Unauthorized/Banned. Bot is shutting down to prevent permanent ban.`);
           process.exit(1);
