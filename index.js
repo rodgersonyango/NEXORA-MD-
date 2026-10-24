@@ -41,8 +41,8 @@ const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
 
-// Changed to blacklord-socket for Group Status support
-const { proto } = require('blacklord-socket');
+// Loaded via @whiskeysockets/baileys alias (which points to blacklord-baileys)
+const { proto } = require('@whiskeysockets/baileys');
 
 const {
   default: makeWASocket,
@@ -53,7 +53,7 @@ const {
   delay,
   jidNormalizedUser,
   jidDecode
-} = require("blacklord-socket");
+} = require("@whiskeysockets/baileys");
 
 const NodeCache = require("node-cache");
 const pino = require("pino");
