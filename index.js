@@ -40,7 +40,9 @@ const mode = require('./lib/mode');
 const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
-const { proto } = require('@whiskeysockets/baileys');
+
+// 👇 CHANGED: Import from blacklord-socket instead of @whiskeysockets/baileys
+const { proto } = require('blacklord-socket');
 
 const {
   default: makeWASocket,
@@ -51,7 +53,8 @@ const {
   delay,
   jidNormalizedUser,
   jidDecode
-} = require("@whiskeysockets/baileys");
+} = require("blacklord-socket");
+// 👆 END CHANGED
 
 const NodeCache = require("node-cache");
 const pino = require("pino");
@@ -263,10 +266,9 @@ function loadCommands() {
     try {
       delete require.cache[require.resolve(filePath)];
       const command = require(filePath);
-      
-      // Support arrays of commands (like our events file)
+
       const cmds = Array.isArray(command) ? command : [command];
-      
+
       for (const cmd of cmds) {
         if (cmd && cmd.name && typeof cmd.execute === 'function') {
           global.commands.set(cmd.name.toLowerCase(), cmd);
@@ -573,7 +575,7 @@ async function startNexora() {
             if (autoView) {
               try {
                 await Nexora.readMessages([mek.key]);
-                
+
                 const DATA_PATH = path.join(process.cwd(), 'data', 'status_views.json');
                 const today = new Date().toLocaleDateString('en-GB', { timeZone: settings.timeZone || 'Africa/Nairobi' });
                 let viewsData = { date: today, count: 0 };
@@ -591,7 +593,7 @@ async function startNexora() {
                   if (!fs.existsSync(path.dirname(DATA_PATH))) fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
                   fs.writeFileSync(DATA_PATH, JSON.stringify(viewsData, null, 2));
                 } catch (e) {}
-                
+
               } catch (e) {
                 if (e.message?.includes('rate-overlimit')) {
                   await new Promise(r => setTimeout(r, 2000));
@@ -779,10 +781,10 @@ RECOVERED MESSAGE:`;
             const dataPath = path.join(process.cwd(), 'data', 'group_events.json');
             let cfg = {};
             if (fs.existsSync(dataPath)) cfg = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-            
+
             const groupCfg = cfg[update.id] || {};
             const isPromote = update.action === 'promote';
-            
+
             if ((isPromote && groupCfg.antipromote) || (!isPromote && groupCfg.antidemote)) {
               const actor = update.author;
               if (actor && actor !== Nexora.user.id.split(':')[0] + '@s.whatsapp.net') {
