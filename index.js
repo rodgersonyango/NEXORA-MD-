@@ -42,7 +42,7 @@ const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
 
-const { proto } = require('@whiskeysockets/baileys');
+const { proto } = require('blacklord-socket');
 
 const {
   default: makeWASocket,
@@ -53,7 +53,7 @@ const {
   delay,
   jidNormalizedUser,
   jidDecode
-} = require("@whiskeysockets/baileys");
+} = require("blacklord-socket");
 
 const NodeCache = require("node-cache");
 const pino = require("pino");
@@ -76,9 +76,7 @@ try {
   if (fs.existsSync('./data/antidelete.json')) {
     const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
     global.antiDelete = adData.enabled !== false;
-  } else {
-    global.antiDelete = settings.antiDelete;
-  }
+  } else { global.antiDelete = settings.antiDelete; }
 } catch (e) { global.antiDelete = settings.antiDelete; }
 
 try {
