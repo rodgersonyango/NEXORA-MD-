@@ -1,5 +1,5 @@
 const settings = require('../../settings');
-const { downloadContentFromMessage, generateWAMessageFromContent, prepareWAMessageMedia, jidNormalizedUser } = require('@whiskeysockets/baileys');
+const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 
 module.exports = {
   name: 'gcstatus',
@@ -16,33 +16,22 @@ module.exports = {
       const content = args.slice(1).join(' ').trim();
       const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
+      if (!['text', 'image', 'video'].includes(type)) {
+        await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
+        return conn.sendMessage(chatId, {
+          text: `Usage:\n.gcstatus text <message>\nReply to an image/video with .gcstatus image|video <caption>\n\n${settings.footer}`
+        }, { quoted: mek });
+      }
+
       await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
-      // This is the critical structure for Group Status V2
-      const contextInfo = {
-        forwardingScore: 0,
-        featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true },
-        pairedMediaType: 0,
-        statusSourceType: 4,
-        statusAttributions: [{ type: 10 }],
-        isGroupStatus: true,
-        statusAudienceMetadata: { audienceType: 1, listEmoji: '📌', listName: 'NEXORA MD' }
-      };
-
-      let innerContent = {};
-
       if (type === 'text') {
-        if (!content) throw new Error('Please provide a message.');
+        if (!content) throw new Error('Please provide a message for the text status.');
         
-        innerContent = {
-          extendedTextMessage: {
-            text: content,
-            contextInfo: contextInfo
-          }
-        };
-      } 
-      
-      else if (type === 'image' || type === 'video') {
+        // Native group status function from blacklord-socket
+        await conn.sendGroupStatus(chatId, { text: content });
+        
+      } else if (type === 'image' || type === 'video') {
         if (!quoted) throw new Error(`Please reply to an ${type} to post it as a status.`);
         
         const mediaType = type === 'image' ? 'imageMessage' : 'videoMessage';
@@ -58,34 +47,9 @@ module.exports = {
           ? { image: buffer, caption: content } 
           : { video: buffer, caption: content };
           
-        const prepared = await prepareWAMessageMedia(mediaInput, { upload: conn.waUploadToServer });
-        
-        if (type === 'image') {
-          innerContent = { imageMessage: prepared.imageMessage };
-          innerContent.imageMessage.contextInfo = contextInfo;
-          innerContent.imageMessage.caption = content;
-        } else {
-          innerContent = { videoMessage: prepared.videoMessage };
-          innerContent.videoMessage.contextInfo = contextInfo;
-          innerContent.videoMessage.caption = content;
-        }
-      } else {
-        throw new Error('Usage: .gcstatus text <message> OR reply to an image/video with .gcstatus image|video <caption>');
+        // Native group status function for media
+        await conn.sendGroupStatus(chatId, mediaInput);
       }
-
-      // Wrap it in groupStatusMessageV2
-      const messageContent = {
-        groupStatusMessageV2: {
-          message: innerContent,
-          ...contextInfo
-        }
-      };
-
-      const msg = generateWAMessageFromContent(chatId, messageContent, {
-        userJid: jidNormalizedUser(conn.user.id)
-      });
-
-      await conn.relayMessage(chatId, msg.message, { messageId: msg.key.id });
 
       await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
       await conn.sendMessage(chatId, { 
