@@ -18,6 +18,7 @@ module.exports = {
 
       await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
+      // This is the critical structure for Group Status V2
       const contextInfo = {
         forwardingScore: 0,
         featureEligibilities: { canBeReshared: true, canReceiveMultiReact: true },
@@ -28,12 +29,12 @@ module.exports = {
         statusAudienceMetadata: { audienceType: 1, listEmoji: '📌', listName: 'NEXORA MD' }
       };
 
-      let messageContent = {};
+      let innerContent = {};
 
       if (type === 'text') {
         if (!content) throw new Error('Please provide a message.');
         
-        messageContent = {
+        innerContent = {
           extendedTextMessage: {
             text: content,
             contextInfo: contextInfo
@@ -60,17 +61,25 @@ module.exports = {
         const prepared = await prepareWAMessageMedia(mediaInput, { upload: conn.waUploadToServer });
         
         if (type === 'image') {
-          messageContent = { imageMessage: prepared.imageMessage };
-          messageContent.imageMessage.contextInfo = contextInfo;
-          messageContent.imageMessage.caption = content;
+          innerContent = { imageMessage: prepared.imageMessage };
+          innerContent.imageMessage.contextInfo = contextInfo;
+          innerContent.imageMessage.caption = content;
         } else {
-          messageContent = { videoMessage: prepared.videoMessage };
-          messageContent.videoMessage.contextInfo = contextInfo;
-          messageContent.videoMessage.caption = content;
+          innerContent = { videoMessage: prepared.videoMessage };
+          innerContent.videoMessage.contextInfo = contextInfo;
+          innerContent.videoMessage.caption = content;
         }
       } else {
         throw new Error('Usage: .gcstatus text <message> OR reply to an image/video with .gcstatus image|video <caption>');
       }
+
+      // Wrap it in groupStatusMessageV2
+      const messageContent = {
+        groupStatusMessageV2: {
+          message: innerContent,
+          ...contextInfo
+        }
+      };
 
       const msg = generateWAMessageFromContent(chatId, messageContent, {
         userJid: jidNormalizedUser(conn.user.id)
