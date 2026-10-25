@@ -266,7 +266,6 @@ function loadCommands() {
       delete require.cache[require.resolve(filePath)];
       const command = require(filePath);
 
-      // Support arrays of commands (like our events file)
       const cmds = Array.isArray(command) ? command : [command];
 
       for (const cmd of cmds) {
@@ -405,6 +404,12 @@ async function startNexora() {
     const wipeSend = async function(jid, content, options = {}) {
       try {
         const result = await baseSend(jid, content, options);
+
+        // ═══ DELAY TO FIX "WAITING FOR THIS MESSAGE" ═══
+        if (content?.text && !content?.react && !content?.delete) {
+          await new Promise(r => setTimeout(r, 350));
+        }
+        // ═══════════════════════════════════════════════
 
         if (global.autoWipeSeconds > 0 &&
             result?.key &&
