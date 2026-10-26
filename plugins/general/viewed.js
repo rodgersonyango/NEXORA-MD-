@@ -47,19 +47,32 @@ module.exports = {
       const currentTime = new Date().toLocaleTimeString('en-GB', {
         timeZone: settings.timeZone || 'Africa/Nairobi',
         hour: '2-digit',
-        minute: '2-digit'
+        minute: '2-digit',
+        hour12: true
       });
 
-      await conn.sendMessage(chatId, {
-        text:
-          `STATUS VIEWER\n\n` +
-          `Total viewed today: ${data.count}\n` +
-          `Date: ${today}\n` +
-          `Time: ${currentTime}\n\n` +
-          `Note: This counter resets automatically at midnight (${settings.timeZone || 'Africa/Nairobi'} time).\n\n` +
-          `${settings.footer}`
-      }, { quoted: mek });
+      // Dynamic status indicator based on activity
+      let activityStatus = 'IDLE';
+      if (data.count > 50) activityStatus = 'HYPER ACTIVE';
+      else if (data.count > 20) activityStatus = 'ACTIVE';
+      else if (data.count > 0) activityStatus = 'VIEWING';
 
+      const text = 
+        `┏━━━━━━━━━━━━━━━━━━━━━━┓\n` +
+        `┃  👁️  𝐒𝐓𝐀𝐓𝐔𝐒 𝐓𝐑𝐀𝐂𝐊𝐄𝐑  \n` +
+        `┗━━━━━━━━━━━━━━━━━━━━━━┛\n\n` +
+        `  ╭──────────────────────\n` +
+        `  │ 📊  Views   : ${String(data.count).padEnd(7)} \n` +
+        `  │ 📅  Date    : ${today} \n` +
+        `  │ ⏰  Time    : ${currentTime.padEnd(7)} \n` +
+        `  │ ⚡  Status  : ${activityStatus.padEnd(7)} \n` +
+        `  ╰──────────────────────\n\n` +
+        `  ┌────────────────────┐\n` +
+        `  │ 🔄 Resets at midnight \n` +
+        `  └────────────────────┘\n\n` +
+        `${settings.footer}`;
+
+      await conn.sendMessage(chatId, { text }, { quoted: mek });
       await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
     } catch (error) {
