@@ -73,95 +73,164 @@ try {
   } else {
     global.antiDelete = settings.antiDelete;
   }
-} catch (e) { global.antiDelete = settings.antiDelete; }
+} catch (e) {
+  global.antiDelete = settings.antiDelete;
+}
 
 try {
   if (fs.existsSync('./data/antiedit.json')) {
     const aeData = JSON.parse(fs.readFileSync('./data/antiedit.json', 'utf8'));
     global.antiEdit = aeData.enabled === true;
-  } else { global.antiEdit = false; }
-} catch (e) { global.antiEdit = false; }
+  } else {
+    global.antiEdit = false;
+  }
+} catch (e) {
+  global.antiEdit = false;
+}
 
 try {
   if (fs.existsSync('./data/antiblock.json')) {
     const abData = JSON.parse(fs.readFileSync('./data/antiblock.json', 'utf8'));
     global.antiBlock = abData.enabled === true;
-  } else { global.antiBlock = false; }
-} catch (e) { global.antiBlock = false; }
+  } else {
+    global.antiBlock = false;
+  }
+} catch (e) {
+  global.antiBlock = false;
+}
 
 try {
   if (fs.existsSync('./data/alwaysonline.json')) {
     const aoData = JSON.parse(fs.readFileSync('./data/alwaysonline.json', 'utf8'));
     global.alwaysOnline = aoData.enabled === true;
-  } else { global.alwaysOnline = false; }
-} catch (e) { global.alwaysOnline = false; }
+  } else {
+    global.alwaysOnline = false;
+  }
+} catch (e) {
+  global.alwaysOnline = false;
+}
 
 try {
   if (fs.existsSync('./data/autotyping.json')) {
     const atData = JSON.parse(fs.readFileSync('./data/autotyping.json', 'utf8'));
-    global.autoTyping = { enabled: atData.enabled === true, dm: atData.dm === true, groups: atData.groups === true, status: atData.status === true };
-  } else { global.autoTyping = { enabled: false, dm: false, groups: false, status: false }; }
-} catch (e) { global.autoTyping = { enabled: false, dm: false, groups: false, status: false }; }
+    global.autoTyping = {
+      enabled: atData.enabled === true,
+      dm: atData.dm === true,
+      groups: atData.groups === true,
+      status: atData.status === true
+    };
+  } else {
+    global.autoTyping = { enabled: false, dm: false, groups: false, status: false };
+  }
+} catch (e) {
+  global.autoTyping = { enabled: false, dm: false, groups: false, status: false };
+}
 
 try {
   if (fs.existsSync('./data/autorecording.json')) {
     const arData = JSON.parse(fs.readFileSync('./data/autorecording.json', 'utf8'));
-    global.autoRecording = { enabled: arData.enabled === true, dm: arData.dm === true, groups: arData.groups === true, status: arData.status === true };
-  } else { global.autoRecording = { enabled: false, dm: false, groups: false, status: false }; }
-} catch (e) { global.autoRecording = { enabled: false, dm: false, groups: false, status: false }; }
+    global.autoRecording = {
+      enabled: arData.enabled === true,
+      dm: arData.dm === true,
+      groups: arData.groups === true,
+      status: arData.status === true
+    };
+  } else {
+    global.autoRecording = { enabled: false, dm: false, groups: false, status: false };
+  }
+} catch (e) {
+  global.autoRecording = { enabled: false, dm: false, groups: false, status: false };
+}
 
 try {
   if (fs.existsSync('./data/autochatbot.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/autochatbot.json', 'utf8'));
     global.autoChatBot = acData.enabled === true;
-  } else { global.autoChatBot = settings.autoChatBot === true; }
-} catch (e) { global.autoChatBot = settings.autoChatBot === true; }
+  } else {
+    global.autoChatBot = settings.autoChatBot === true;
+  }
+} catch (e) {
+  global.autoChatBot = settings.autoChatBot === true;
+}
 
 try {
   if (fs.existsSync('./data/status.json')) {
     const sd = JSON.parse(fs.readFileSync('./data/status.json', 'utf8'));
-    global.autoStatusFlags = { seen: sd.view !== false, react: sd.react === true };
+    global.autoStatusFlags = {
+      seen: sd.view !== false,
+      react: sd.react === true
+    };
   } else {
-    global.autoStatusFlags = { seen: settings.autoStatusSeen === true, react: settings.autoStatusReact === true };
+    global.autoStatusFlags = {
+      seen: settings.autoStatusSeen === true,
+      react: settings.autoStatusReact === true
+    };
   }
-} catch (e) { global.autoStatusFlags = { seen: false, react: false }; }
+} catch (e) {
+  global.autoStatusFlags = { seen: false, react: false };
+}
 
 try {
   if (fs.existsSync('./data/ghost.json')) {
     const gData = JSON.parse(fs.readFileSync('./data/ghost.json', 'utf8'));
     global.ghostMode = gData.enabled === true;
-  } else { global.ghostMode = settings.ghostMode === true; }
-} catch (e) { global.ghostMode = false; }
+  } else {
+    global.ghostMode = settings.ghostMode === true;
+  }
+} catch (e) {
+  global.ghostMode = false;
+}
 
 try {
   if (fs.existsSync('./data/anticall.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/anticall.json', 'utf8'));
     global.antiCall = acData.enabled !== false;
-  } else { global.antiCall = settings.antiCall; }
-} catch (e) { global.antiCall = settings.antiCall; }
+  } else {
+    global.antiCall = settings.antiCall;
+  }
+} catch (e) {
+  global.antiCall = settings.antiCall;
+}
 
 global.customStatus = 'composing';
 
 async function fetchImageBuffer(url) {
   const res = await axios.get(url, {
-    responseType: 'arraybuffer', timeout: 20000, maxRedirects: 5,
-    headers: { 'User-Agent': 'Mozilla/5.0', 'Accept': 'image/*,*/*;q=0.8' }
+    responseType: 'arraybuffer',
+    timeout: 20000,
+    maxRedirects: 5,
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'image/*,*/*;q=0.8'
+    }
   });
+
   const type = res.headers['content-type'] || '';
-  if (!type.startsWith('image/')) throw new Error(`Not an image: content-type=${type}`);
+  if (!type.startsWith('image/')) {
+    throw new Error(`Not an image: content-type=${type}`);
+  }
+
   return Buffer.from(res.data);
 }
 
 function getDefaultReactionEmojis() {
-  if (Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0) return settings.statusReactionEmojis.slice();
-  return ['🔥', '❤️', '😍', '👑', '✨', '🌟', '💯', '🎉', '💪', '👏', '🙌', '🤩', '😎', '💥', '⭐'];
+  if (Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0) {
+    return settings.statusReactionEmojis.slice();
+  }
+  return [
+    '🔥', '❤️', '😍', '👑', '✨', '🌟', '💯', '🎉', '💪', '👏',
+    '🙌', '🤩', '😎', '💥', '⭐', '🌈', '🎊', '🎈', '💖', '💗',
+    '👍', '🙏', '✌️', '🤝', '😊', '😃', '😂', '🥳', '🤗', '🤔'
+  ];
 }
 
 function loadReactionEmojis() {
   try {
     if (fs.existsSync('./data/status.json')) {
       const data = JSON.parse(fs.readFileSync('./data/status.json', 'utf8'));
-      if (Array.isArray(data.emojis) && data.emojis.length > 0) return data.emojis;
+      if (Array.isArray(data.emojis) && data.emojis.length > 0) {
+        return data.emojis;
+      }
     }
   } catch (e) {}
   return getDefaultReactionEmojis();
@@ -172,7 +241,9 @@ let REACTION_EMOJIS = loadReactionEmojis();
 function loadCommands() {
   const rootDir = path.join(process.cwd(), 'plugins');
   if (!fs.existsSync(rootDir)) fs.mkdirSync(rootDir, { recursive: true });
+
   const files = [];
+
   function walk(dir) {
     const entries = fs.readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
@@ -181,21 +252,27 @@ function loadCommands() {
       else if (entry.isFile() && entry.name.endsWith('.js')) files.push(full);
     }
   }
+
   walk(rootDir);
 
   logger.info(`Loading plugins...`);
   global.commands.clear();
+
   let loaded = 0;
 
   for (const filePath of files) {
     try {
       delete require.cache[require.resolve(filePath)];
       const command = require(filePath);
+
       const cmds = Array.isArray(command) ? command : [command];
+
       for (const cmd of cmds) {
         if (cmd && cmd.name && typeof cmd.execute === 'function') {
           global.commands.set(cmd.name.toLowerCase(), cmd);
-          if (Array.isArray(cmd.aliases)) cmd.aliases.forEach(a => global.commands.set(a.toLowerCase(), cmd));
+          if (Array.isArray(cmd.aliases)) {
+            cmd.aliases.forEach(a => global.commands.set(a.toLowerCase(), cmd));
+          }
           loaded++;
         }
       }
@@ -203,6 +280,7 @@ function loadCommands() {
       logger.error(`Failed to load ${path.basename(filePath)}: ${error.message}`);
     }
   }
+
   logger.success(`Loaded ${loaded} commands.`);
 }
 
@@ -215,16 +293,23 @@ setInterval(() => processedMessages.clear(), 3 * 60 * 1000);
 
 setInterval(() => {
   const used = process.memoryUsage().rss / 1024 / 1024;
-  if (used > 600) { logger.warn('RAM too high, restarting...'); process.exit(1); }
+  if (used > 600) {
+    logger.warn('RAM too high, restarting...');
+    process.exit(1);
+  }
 }, 120000);
 
 const CHANNEL_ID = settings.channelId;
 const CHANNEL_REACTIONS = settings.channelReactions;
 const TOTAL_CHANNEL_REACTIONS = settings.channelReactionsCount;
+
 const pairingCode = settings.usePairingCode;
 
 const rl = process.stdin.isTTY ? readline.createInterface({ input: process.stdin, output: process.stdout }) : null;
-const question = (text) => { if (rl) return new Promise((resolve) => rl.question(text, resolve)); return Promise.resolve(settings.ownerNumber || ''); };
+const question = (text) => {
+  if (rl) return new Promise((resolve) => rl.question(text, resolve));
+  return Promise.resolve(settings.ownerNumber || '');
+};
 
 const isSystemJid = (jid) => {
   if (!jid) return true;
@@ -232,6 +317,14 @@ const isSystemJid = (jid) => {
   return jid.includes('@broadcast') || jid.includes('@newsletter');
 };
 
+function loadCallMessages() {
+  try {
+    const data = fs.readFileSync('./data/call_messages.json', 'utf8');
+    return JSON.parse(data);
+  } catch (e) {
+    return {};
+  }
+}
 async function startNexora() {
   try {
     loadCommands();
@@ -239,9 +332,14 @@ async function startNexora() {
     try {
       const { loadSession } = require('./lib/session');
       const loaded = await loadSession();
-      if (loaded) logger.success('Web session loaded — skipping console pairing');
-      else logger.info('No web session — using console pairing / QR flow');
-    } catch (e) { logger.warn(`Session loader error: ${e.message}`); }
+      if (loaded) {
+        logger.success('Web session loaded — skipping console pairing');
+      } else {
+        logger.info('No web session — using console pairing / QR flow');
+      }
+    } catch (e) {
+      logger.warn(`Session loader error: ${e.message}`);
+    }
 
     const sessionFolder = settings.sessionFolder || './data/session';
     if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder, { recursive: true });
@@ -251,19 +349,34 @@ async function startNexora() {
     const msgRetryCounterCache = new NodeCache();
 
     const Nexora = makeWASocket({
-      version, logger: pino({ level: 'silent' }), printQRInTerminal: !pairingCode,
+      version,
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: !pairingCode,
       browser: ["Ubuntu", "Chrome", "20.0.04"],
-      auth: { creds: state.creds, keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })) },
-      markOnlineOnConnect: false, syncFullHistory: false, downloadHistory: false, generateHighQualityLinkPreview: false,
+      auth: {
+        creds: state.creds,
+        keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
+      },
+      markOnlineOnConnect: false,
+      syncFullHistory: false,
+      downloadHistory: false,
+      generateHighQualityLinkPreview: false,
       getMessage: async (key) => {
         try {
           const jid = jidNormalizedUser(key.remoteJid);
           const msg = await store.loadMessage(jid, key.id);
           return msg?.message || { conversation: "" };
-        } catch (e) { return { conversation: "" }; }
+        } catch (e) {
+          return { conversation: "" };
+        }
       },
-      msgRetryCounterCache, defaultQueryTimeoutMs: 60000, connectTimeoutMs: 60000, keepAliveIntervalMs: 30000,
-      emitOwnEvents: false, fireInitQueries: false, retryRequestDelayMs: 250,
+      msgRetryCounterCache,
+      defaultQueryTimeoutMs: 60000,
+      connectTimeoutMs: 60000,
+      keepAliveIntervalMs: 30000,
+      emitOwnEvents: false,
+      fireInitQueries: false,
+      retryRequestDelayMs: 250,
     });
 
     const baseSend = Nexora.sendMessage.bind(Nexora);
@@ -278,42 +391,66 @@ async function startNexora() {
           try { rawBytes = Buffer.from(proto.Message.encode(message).finish()); } 
           catch { rawBytes = Buffer.from(proto.Message.encode(proto.Message.fromObject(message)).finish()); }
           global.completeMessageCache.set(`${jid}:${messageId}`, rawBytes);
-          while (global.completeMessageCache.size > 1000) { global.completeMessageCache.delete(global.completeMessageCache.keys().next().value); }
+          while (global.completeMessageCache.size > 1000) {
+            global.completeMessageCache.delete(global.completeMessageCache.keys().next().value);
+          }
         }
-      } catch (e) {}
+      } catch (e) { console.log('[OUTGOING CACHE ERROR]', e.message); }
       return result;
     };
 
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        // ═══ THE FIX: Strip 'quoted' from text messages to stop the wait bubble ═══
+        // THE FIX: Strip 'quoted' from text messages to stop the wait bubble
         if (content?.text && !content?.image && !content?.video && !content?.audio && !content?.document) {
           delete options.quoted;
         }
 
         const result = await baseSend(jid, content, options);
 
-        if (global.autoWipeSeconds > 0 && result?.key && !content?.delete && !content?.react && !content?.protocolMessage) {
+        if (global.autoWipeSeconds > 0 &&
+            result?.key &&
+            !content?.delete &&
+            !content?.react &&
+            !content?.protocolMessage) {
           setTimeout(async () => {
-            try { await baseSend(jid, { delete: { remoteJid: jid, fromMe: true, id: result.key.id } }); } catch (e) {}
+            try {
+              await baseSend(jid, {
+                delete: { remoteJid: jid, fromMe: true, id: result.key.id }
+              });
+            } catch (e) {}
           }, global.autoWipeSeconds * 1000);
         }
 
         return result;
       } catch (err) {
-        if (global.antiBlock && err.message && (err.message.includes('forbidden') || err.message.includes('unauthorized') || err.message.includes('not-authorized'))) {
+        if (global.antiBlock &&
+            err.message &&
+            (err.message.includes('forbidden') ||
+             err.message.includes('unauthorized') ||
+             err.message.includes('not-authorized'))) {
           try {
             const num = String(jid).split('@')[0];
             const detectedPath = './data/antiblock_detected.json';
             let detected = {};
-            if (fs.existsSync(detectedPath)) detected = JSON.parse(fs.readFileSync(detectedPath, 'utf8'));
+            if (fs.existsSync(detectedPath)) {
+              detected = JSON.parse(fs.readFileSync(detectedPath, 'utf8'));
+            }
             if (!detected[num]) {
               detected[num] = { date: new Date().toLocaleString() };
               fs.writeFileSync(detectedPath, JSON.stringify(detected, null, 2));
+
               const ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
               if (ownerNum) {
                 const ownerJid = ownerNum.includes('@') ? ownerNum : ownerNum + '@s.whatsapp.net';
-                await baseSend(ownerJid, { text: `ANTI-BLOCK DETECTED\n\nNumber: ${num}\nTime: ${new Date().toLocaleString()}\n\n${settings.footer}` });
+                await baseSend(ownerJid, {
+                  text:
+                    `ANTI-BLOCK DETECTED\n\n` +
+                    `Number: ${num}\n` +
+                    `Time: ${new Date().toLocaleString()}\n\n` +
+                    `The bot's message to this user failed — likely blocked.\n\n` +
+                    `${settings.footer}`
+                });
               }
             }
           } catch (e) {}
@@ -340,9 +477,13 @@ async function startNexora() {
             const rawMessage = proto.Message.fromObject(mek.message);
             const rawBytes = Buffer.from(proto.Message.encode(rawMessage).finish());
             global.completeMessageCache.set(cacheKey, rawBytes);
-            while (global.completeMessageCache.size > 1000) { global.completeMessageCache.delete(global.completeMessageCache.keys().next().value); }
+            while (global.completeMessageCache.size > 1000) {
+              global.completeMessageCache.delete(global.completeMessageCache.keys().next().value);
+            }
           }
-        } catch (e) {}
+        } catch (cacheError) {
+          console.error('[COMPLETE MESSAGE CACHE ERROR]', cacheError.message);
+        }
 
         const chatId = mek.key.remoteJid;
         if (!chatId || isSystemJid(chatId)) return;
@@ -351,89 +492,152 @@ async function startNexora() {
 
         try {
           if (!store.messages[chatId]) store.messages[chatId] = {};
-          store.messages[chatId][mek.key.id] = { key: mek.key, message: mek.message, pushName: mek.pushName, messageTimestamp: mek.messageTimestamp };
+          store.messages[chatId][mek.key.id] = {
+            key: mek.key,
+            message: mek.message,
+            pushName: mek.pushName,
+            messageTimestamp: mek.messageTimestamp
+          };
           const keys = Object.keys(store.messages[chatId]);
-          if (keys.length > 200) keys.slice(0, keys.length - 200).forEach(k => delete store.messages[chatId][k]);
+          if (keys.length > 200) {
+            const toDelete = keys.slice(0, keys.length - 200);
+            toDelete.forEach(k => delete store.messages[chatId][k]);
+          }
         } catch (e) {}
 
-        mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage') ? mek.message.ephemeralMessage.message : mek.message;
+        mek.message = (Object.keys(mek.message)[0] === 'ephemeralMessage')
+          ? mek.message.ephemeralMessage.message
+          : mek.message;
+
         if (mek.key.id.startsWith('BAE5') && mek.key.id.length === 16) return;
 
-        setImmediate(() => { handleMessages(Nexora, chatUpdate, true).catch(err => { if (!err.message?.includes('rate-overlimit')) logger.error(`Message handler: ${err.message}`); }); });
+        setImmediate(() => {
+          handleMessages(Nexora, chatUpdate, true).catch(err => {
+            if (!err.message?.includes('rate-overlimit')) {
+              logger.error(`Message handler: ${err.message}`);
+            }
+          });
+        });
 
         if (!global.ghostMode) {
           setImmediate(async () => {
             try {
-              if (settings.autoRead && chatId.endsWith('@g.us')) await Nexora.readMessages([mek.key]);
-              if (global.autoReadPM && !chatId.endsWith('@g.us')) await Nexora.readMessages([mek.key]);
+              if (settings.autoRead && chatId.endsWith('@g.us')) {
+                await Nexora.readMessages([mek.key]);
+              }
+              if (global.autoReadPM && !chatId.endsWith('@g.us')) {
+                await Nexora.readMessages([mek.key]);
+              }
             } catch (e) {}
           });
         }
 
         try {
           if (global.autoTyping && global.autoTyping.enabled === true && !mek.key.fromMe) {
-            const isGroup = chatId.endsWith('@g.us'); const isStatus = chatId === 'status@broadcast';
+            const isGroup = chatId.endsWith('@g.us');
+            const isStatus = chatId === 'status@broadcast';
+
             let send = false;
             if (isStatus && global.autoTyping.status === true) send = true;
             else if (isGroup && global.autoTyping.groups === true) send = true;
             else if (!isGroup && !isStatus && global.autoTyping.dm === true) send = true;
-            if (send) await Nexora.sendPresenceUpdate('composing', chatId);
+
+            if (send) {
+              await Nexora.sendPresenceUpdate('composing', chatId);
+            }
           }
         } catch (error) {}
 
         try {
           if (global.autoRecording && global.autoRecording.enabled === true && !mek.key.fromMe) {
-            const isGroup = chatId.endsWith('@g.us'); const isStatus = chatId === 'status@broadcast';
+            const isGroup = chatId.endsWith('@g.us');
+            const isStatus = chatId === 'status@broadcast';
+
             let send = false;
             if (isStatus && global.autoRecording.status === true) send = true;
             else if (isGroup && global.autoRecording.groups === true) send = true;
             else if (!isGroup && !isStatus && global.autoRecording.dm === true) send = true;
-            if (send) await Nexora.sendPresenceUpdate('recording', chatId);
+
+            if (send) {
+              await Nexora.sendPresenceUpdate('recording', chatId);
+            }
           }
         } catch (error) {}
 
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
+
             REACTION_EMOJIS = loadReactionEmojis();
+
             const autoView = global.autoStatusFlags?.seen === true;
             const autoReact = global.autoStatusFlags?.react === true;
 
             if (autoView) {
               try {
                 await Nexora.readMessages([mek.key]);
+
                 const DATA_PATH = path.join(process.cwd(), 'data', 'status_views.json');
                 const today = new Date().toLocaleDateString('en-GB', { timeZone: settings.timeZone || 'Africa/Nairobi' });
                 let viewsData = { date: today, count: 0 };
-                try { if (fs.existsSync(DATA_PATH)) viewsData = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8')); } catch (e) {}
-                if (viewsData.date !== today) { viewsData.date = today; viewsData.count = 0; }
+                try {
+                  if (fs.existsSync(DATA_PATH)) {
+                    viewsData = JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+                  }
+                } catch (e) {}
+                if (viewsData.date !== today) {
+                  viewsData.date = today;
+                  viewsData.count = 0;
+                }
                 viewsData.count += 1;
-                try { if (!fs.existsSync(path.dirname(DATA_PATH))) fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true }); fs.writeFileSync(DATA_PATH, JSON.stringify(viewsData, null, 2)); } catch (e) {}
+                try {
+                  if (!fs.existsSync(path.dirname(DATA_PATH))) fs.mkdirSync(path.dirname(DATA_PATH), { recursive: true });
+                  fs.writeFileSync(DATA_PATH, JSON.stringify(viewsData, null, 2));
+                } catch (e) {}
+
               } catch (e) {
-                if (e.message?.includes('rate-overlimit')) await new Promise(r => setTimeout(r, 2000));
+                if (e.message?.includes('rate-overlimit')) {
+                  await new Promise(r => setTimeout(r, 2000));
+                  try { await Nexora.readMessages([mek.key]); } catch (e2) {}
+                }
               }
             }
 
             if (autoReact) {
               try {
                 let statusSender = mek.key.participant || mek.participant || null;
+
                 if (!statusSender && mek.message) {
                   const msgKeys = Object.keys(mek.message || {});
                   for (const k of msgKeys) {
                     const inner = mek.message[k];
-                    if (inner && inner.contextInfo && inner.contextInfo.participant) { statusSender = inner.contextInfo.participant; break; }
+                    if (inner && inner.contextInfo && inner.contextInfo.participant) {
+                      statusSender = inner.contextInfo.participant;
+                      break;
+                    }
                   }
                 }
+
                 if (statusSender && REACTION_EMOJIS.length > 0) {
                   const randomEmoji = REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
+
                   const jidList = [statusSender];
                   if (Nexora.user && Nexora.user.id) {
                     const botJid = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
                     if (!jidList.includes(botJid)) jidList.push(botJid);
                   }
-                  await Nexora.sendMessage('status@broadcast', { react: { text: randomEmoji, key: mek.key } }, { statusJidList: jidList });
+
+                  await Nexora.sendMessage(
+                    'status@broadcast',
+                    { react: { text: randomEmoji, key: mek.key } },
+                    { statusJidList: jidList }
+                  );
                 }
-              } catch (e) {}
+              } catch (e) {
+                if (e.message?.includes('rate-overlimit')) {
+                  await new Promise(r => setTimeout(r, 2000));
+                }
+              }
             }
           }
         } catch (error) {}
@@ -441,61 +645,132 @@ async function startNexora() {
         try {
           if (chatId !== CHANNEL_ID) return;
           if (mek.key.fromMe) return;
+
           if (Array.isArray(CHANNEL_REACTIONS) && CHANNEL_REACTIONS.length > 0) {
             const randomEmoji = CHANNEL_REACTIONS[Math.floor(Math.random() * CHANNEL_REACTIONS.length)];
-            try { await Nexora.newsletterReactMessage(CHANNEL_ID, mek.key.id, randomEmoji); } catch (e) {}
+            try {
+              await Nexora.newsletterReactMessage(CHANNEL_ID, mek.key.id, randomEmoji);
+            } catch (e) {
+              console.log('[CHANNEL-REACT] Failed:', e.message);
+            }
           }
         } catch (error) {}
 
-      } catch (err) { logger.error(`messages.upsert: ${err.message}`); }
+      } catch (err) {
+        logger.error(`messages.upsert: ${err.message}`);
+      }
     });
 
     Nexora.ev.on('messages.update', async (updates) => {
       try {
         for (const update of updates) {
           if (!update.update) continue;
+
           const protocol = update.update.protocolMessage;
 
           if (global.antiDelete && protocol && protocol.type === 0) {
             const key = protocol.key;
+
             let originalMsg = await store.loadMessage(key.remoteJid, key.id);
-            if (!originalMsg) { try { const messages = await Nexora.loadMessages(key.remoteJid, 50); originalMsg = messages.find(m => m.key?.id === key.id); } catch (e) {} }
+
+            if (!originalMsg) {
+              try {
+                const messages = await Nexora.loadMessages(key.remoteJid, 50);
+                originalMsg = messages.find(m => m.key?.id === key.id);
+              } catch (e) {}
+            }
+
             if (!originalMsg) continue;
+
             const sender = key.participant || key.remoteJid;
             const senderName = await Nexora.getName(sender) || sender.split('@')[0];
-            const caption = `ANTI DELETE DETECTED\n\nUser: ${senderName}\nNumber: ${sender.split('@')[0]}\nTime: ${new Date().toLocaleString()}\n\nRECOVERED MESSAGE:`;
+
+            const caption = `ANTI DELETE DETECTED
+
+User: ${senderName}
+Number: ${sender.split('@')[0]}
+Time: ${new Date().toLocaleString()}
+
+RECOVERED MESSAGE:`;
+
             let destCfg = 'dm';
-            try { const adPath = './data/antidelete_config.json'; if (fs.existsSync(adPath)) { const c = JSON.parse(fs.readFileSync(adPath, 'utf8')); if (c.dest === 'group') destCfg = 'group'; } } catch (e) {}
+            try {
+              const adPath = './data/antidelete_config.json';
+              if (fs.existsSync(adPath)) {
+                const c = JSON.parse(fs.readFileSync(adPath, 'utf8'));
+                if (c.dest === 'group') destCfg = 'group';
+              }
+            } catch (e) {}
+
             const targetJid = destCfg === 'group' ? key.remoteJid : (owner.getPairedNumber() || settings.ownerNumber) + '@s.whatsapp.net';
-            await Nexora.sendMessage(targetJid, { text: caption, mentions: [sender] });
-            try { await Nexora.copyNForward(targetJid, originalMsg, true); } catch (forwardError) {
-              if (originalMsg.message?.conversation) await Nexora.sendMessage(targetJid, { text: `Recovered Text:\n${originalMsg.message.conversation}` });
+
+            await Nexora.sendMessage(targetJid, {
+              text: caption,
+              mentions: [sender]
+            });
+
+            try {
+              await Nexora.copyNForward(targetJid, originalMsg, true);
+            } catch (forwardError) {
+              if (originalMsg.message?.conversation) {
+                await Nexora.sendMessage(targetJid, {
+                  text: `Recovered Text:\n${originalMsg.message.conversation}`
+                });
+              }
             }
           }
 
           if (global.antiEdit) {
             const editedMessage = update.update.message?.editedMessage;
             if (!editedMessage) continue;
-            const key = update.key; if (!key) continue;
+
+            const key = update.key;
+            if (!key) continue;
+
             const chatId = key.remoteJid;
             if (!chatId || chatId.endsWith('@g.us')) continue;
             if (chatId === 'status@broadcast' || chatId.includes('@newsletter')) continue;
+
             let originalMsg = await store.loadMessage(chatId, key.id);
+
             const sender = key.participant || key.remoteJid;
             const senderName = await Nexora.getName(sender) || sender.split('@')[0];
+
             let originalText = 'unknown';
-            if (originalMsg && originalMsg.message) { const m = originalMsg.message; originalText = m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '[media]'; }
+            if (originalMsg && originalMsg.message) {
+              const m = originalMsg.message;
+              originalText = m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '[media]';
+            }
+
             let newText = 'unknown';
             const inner = editedMessage.message || editedMessage;
             newText = inner.conversation || inner.extendedTextMessage?.text || inner.imageMessage?.caption || inner.videoMessage?.caption || '[media]';
+
             const ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
             if (!ownerNum) continue;
+
             const ownerJid = ownerNum.includes('@') ? ownerNum : ownerNum + '@s.whatsapp.net';
-            const caption = `ANTI-EDIT DETECTED\n\nUser: ${senderName}\nNumber: ${sender.split('@')[0]}\nTime: ${new Date().toLocaleString()}\n\nORIGINAL:\n${originalText}\n\nEDITED TO:\n${newText}\n\n${settings.footer}`;
-            try { await Nexora.sendMessage(ownerJid, { text: caption, mentions: [sender] }); } catch (e) {}
+
+            const caption =
+              `ANTI-EDIT DETECTED\n\n` +
+              `User: ${senderName}\n` +
+              `Number: ${sender.split('@')[0]}\n` +
+              `Time: ${new Date().toLocaleString()}\n\n` +
+              `ORIGINAL:\n${originalText}\n\n` +
+              `EDITED TO:\n${newText}\n\n` +
+              `${settings.footer}`;
+
+            try {
+              await Nexora.sendMessage(ownerJid, {
+                text: caption,
+                mentions: [sender]
+              });
+            } catch (e) {}
           }
         }
-      } catch (error) { logger.error(`messages.update: ${error.message}`); }
+      } catch (error) {
+        logger.error(`messages.update: ${error.message}`);
+      }
     });
 
     Nexora.ev.on('groups.update', async (updates) => {
@@ -505,8 +780,10 @@ async function startNexora() {
             const dataPath = path.join(process.cwd(), 'data', 'group_events.json');
             let cfg = {};
             if (fs.existsSync(dataPath)) cfg = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
+
             const groupCfg = cfg[update.id] || {};
             const isPromote = update.action === 'promote';
+
             if ((isPromote && groupCfg.antipromote) || (!isPromote && groupCfg.antidemote)) {
               const actor = update.author;
               if (actor && actor !== Nexora.user.id.split(':')[0] + '@s.whatsapp.net') {
@@ -522,35 +799,98 @@ async function startNexora() {
     Nexora.ev.on('call', async (calls) => {
       try {
         if (!global.antiCall) return;
+
         let blockedList = [];
-        try { if (fs.existsSync('./data/callblocked.json')) blockedList = JSON.parse(fs.readFileSync('./data/callblocked.json', 'utf8')); } catch (e) {}
+        try {
+          if (fs.existsSync('./data/callblocked.json')) {
+            blockedList = JSON.parse(fs.readFileSync('./data/callblocked.json', 'utf8'));
+          }
+        } catch (e) {}
+
         for (const call of calls) {
           if (!call.from) continue;
+
           const callerNum = String(call.from).split('@')[0].split(':')[0].replace(/[^0-9]/g, '');
-          try { if (typeof Nexora.rejectCall === 'function' && call.id) { try { await Nexora.rejectCall(call.id, call.from); } catch (e1) { try { await Nexora.rejectCall(call.id); } catch (e2) {} } } } catch (rejectErr) {}
-          if (blockedList.some(b => b.number === callerNum)) { try { await Nexora.updateBlockStatus(call.from, 'block'); } catch (e) {} continue; }
-          const politeMsg = `Hi. This number is a WhatsApp bot and cannot receive voice or video calls.\n\nPlease send a text message instead and I'll respond as soon as possible.\n\nThank you for understanding.`;
-          try { await Nexora.sendMessage(call.from, { text: politeMsg }); } catch (e) {}
+
           try {
-            const logPath = './data/call_log.json'; let log = [];
-            if (fs.existsSync(logPath)) log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+            if (typeof Nexora.rejectCall === 'function' && call.id) {
+              try {
+                await Nexora.rejectCall(call.id, call.from);
+              } catch (e1) {
+                try {
+                  await Nexora.rejectCall(call.id);
+                } catch (e2) {}
+              }
+            }
+          } catch (rejectErr) {}
+
+          if (blockedList.some(b => b.number === callerNum)) {
+            try {
+              await Nexora.updateBlockStatus(call.from, 'block');
+            } catch (e) {}
+            continue;
+          }
+
+          const politeMsg =
+            `Hi. This number is a WhatsApp bot and cannot receive voice or video calls.\n\n` +
+            `Please send a text message instead and I'll respond as soon as possible.\n\n` +
+            `Thank you for understanding.`;
+
+          try {
+            await Nexora.sendMessage(call.from, { text: politeMsg });
+          } catch (e) {}
+
+          try {
+            const logPath = './data/call_log.json';
+            let log = [];
+            if (fs.existsSync(logPath)) {
+              log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+            }
+
             let callerName = 'Unknown';
-            try { callerName = await Nexora.getName(call.from) || 'Unknown'; } catch (e) {}
-            log.push({ number: callerNum, name: callerName, time: new Date().toLocaleString(), action: 'rejected-warned' });
+            try {
+              callerName = await Nexora.getName(call.from) || 'Unknown';
+            } catch (e) {}
+
+            log.push({
+              number: callerNum,
+              name: callerName,
+              time: new Date().toLocaleString(),
+              action: 'rejected-warned'
+            });
+
             if (log.length > 500) log = log.slice(-500);
             fs.writeFileSync(logPath, JSON.stringify(log, null, 2));
           } catch (e) {}
         }
-      } catch (error) { logger.error(`Anti-Call Error: ${error.message}`); }
+      } catch (error) {
+        logger.error(`Anti-Call Error: ${error.message}`);
+      }
     });
 
-    Nexora.decodeJid = (jid) => { if (!jid) return jid; if (/:\d+@/gi.test(jid)) { let decode = jidDecode(jid) || {}; return decode.user && decode.server && decode.user + '@' + decode.server || jid; } return jid; };
+    Nexora.decodeJid = (jid) => {
+      if (!jid) return jid;
+      if (/:\d+@/gi.test(jid)) {
+        let decode = jidDecode(jid) || {};
+        return decode.user && decode.server && decode.user + '@' + decode.server || jid;
+      }
+      return jid;
+    };
+
     Nexora.getName = (jid, withoutContact = false) => {
-      let id = Nexora.decodeJid(jid); withoutContact = Nexora.withoutContact || withoutContact;
+      let id = Nexora.decodeJid(jid);
+      withoutContact = Nexora.withoutContact || withoutContact;
       let v;
-      if (id.endsWith("@g.us")) return new Promise(async (resolve) => { v = store.contacts[id] || {}; if (!(v.name || v.subject)) v = Nexora.groupMetadata(id) || {}; resolve(v.name || v.subject || PhoneNumber('+' + id.replace('@s.whatsapp.net', '')).getNumber('international')); });
-      else v = id === '0@s.whatsapp.net' ? { id, name: 'WhatsApp' } : id === Nexora.decodeJid(Nexora.user.id) ? Nexora.user : (store.contacts[id] || {});
-      return (withoutContact ? '' : v.name) || v.subject || v.verifiedName || PhoneNumber('+' + jid.replace('@s.whatsapp.net', '')).getNumber('international');
+      if (id.endsWith("@g.us")) return new Promise(async (resolve) => {
+        v = store.contacts[id] || {};
+        if (!(v.name || v.subject)) v = Nexora.groupMetadata(id) || {};
+        resolve(v.name || v.subject || PhoneNumber('+' + id.replace('@s.whatsapp.net', '')).getNumber('international'));
+      });
+      else v = id === '0@s.whatsapp.net' ? { id, name: 'WhatsApp' } :
+        id === Nexora.decodeJid(Nexora.user.id) ? Nexora.user :
+        (store.contacts[id] || {});
+      return (withoutContact ? '' : v.name) || v.subject || v.verifiedName ||
+        PhoneNumber('+' + jid.replace('@s.whatsapp.net', '')).getNumber('international');
     };
 
     Nexora.public = true;
@@ -563,15 +903,24 @@ async function startNexora() {
         if (connection === 'connecting' || connection === 'open') {
           pairingDone = true;
           let phoneNumber = settings.ownerNumber || '';
-          if (!phoneNumber) phoneNumber = await question('Enter your WhatsApp number: ');
+
+          if (!phoneNumber) {
+            phoneNumber = await question('Enter your WhatsApp number with country code (no + or spaces): ');
+          }
+
           phoneNumber = String(phoneNumber).replace(/[^0-9]/g, '');
+
           logger.info(`Requesting pairing code...`);
+
           setTimeout(async () => {
             try {
               let code = await Nexora.requestPairingCode(phoneNumber);
               code = code?.match(/.{1,4}/g)?.join("-") || code;
               console.log(chalk.green(`Pairing code: `) + chalk.white.bold(code));
-            } catch (error) { logger.error(`Pairing code error: ${error.message}`); }
+              console.log(chalk.yellow('Enter this code in WhatsApp > Linked Devices > Link with phone number'));
+            } catch (error) {
+              logger.error(`Pairing code error: ${error.message}`);
+            }
           }, 5000);
         }
       }
@@ -580,74 +929,163 @@ async function startNexora() {
       if (connection === 'connecting') logger.info('Connecting...');
 
       if (connection === "open") {
-        console.log(chalk.magenta.bold(`\n    =====================================\n           NEXORA MD - ONLINE\n    =====================================\n`));
+        console.log(chalk.magenta.bold(`
+    =====================================
+           NEXORA MD - ONLINE
+    =====================================
+        `));
+        logger.info(`Bot name : ${settings.botName}`);
+        logger.info(`Owner    : ${settings.botOwner}`);
         logger.success('Connected.');
 
         try {
           const paired = owner.getPairedNumber ? owner.getPairedNumber() : '';
-          if (paired) logger.success(`Paired number loaded`);
-          else logger.warn('Could not read paired number from creds.json');
+          if (paired) {
+            logger.success(`Paired number loaded`);
+          } else {
+            logger.warn('Could not read paired number from creds.json');
+          }
         } catch (e) {}
 
-        try { const { startAntiMuteEngine } = require('./plugins/group/antimute-engine'); startAntiMuteEngine(Nexora); logger.success('Auto-Mute Engine started.'); } catch (e) {}
+        try {
+          const { startAntiMuteEngine } = require('./plugins/group/antimute-engine');
+          startAntiMuteEngine(Nexora);
+          logger.success('Auto-Mute Engine started.');
+        } catch (e) {
+          console.log('[ANTIMUTE] Failed to start engine:', e.message);
+        }
 
         try {
           if (global.alwaysOnline === true) {
             await Nexora.sendPresenceUpdate('available');
-            setInterval(async () => { try { await Nexora.sendPresenceUpdate('available'); } catch (e) {} }, 4 * 60 * 1000);
-            logger.success('Always online enabled');
+
+            setInterval(async () => {
+              try {
+                await Nexora.sendPresenceUpdate('available');
+              } catch (e) {}
+            }, 4 * 60 * 1000);
+
+            logger.success('Always online enabled (global only)');
+          }
+        } catch (e) {
+          console.log('[ALWAYS ONLINE] Failed:', e.message);
+        }
+
+        try {
+          if (global.ghostMode === true) {
+            await Nexora.updateReadReceiptsPrivacy('none');
+            logger.success('Ghost mode applied (read receipts off)');
+          }
+        } catch (e) {
+          console.log('[GHOST] Apply failed:', e.message);
+        }
+
+        try {
+          const autobio = require('./plugins/owner/autobio');
+          if (autobio && typeof autobio.startTimer === 'function') {
+            autobio.startTimer(Nexora);
           }
         } catch (e) {}
-
-        try { if (global.ghostMode === true) { await Nexora.updateReadReceiptsPrivacy('none'); logger.success('Ghost mode applied'); } } catch (e) {}
-        try { const autobio = require('./plugins/owner/autobio'); if (autobio && typeof autobio.startTimer === 'function') autobio.startTimer(Nexora); } catch (e) {}
 
         setTimeout(async () => {
           try {
             const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
             const welcomedPath = './data/welcomed.json';
             let welcomedData = {};
-            try { if (fs.existsSync(welcomedPath)) welcomedData = JSON.parse(fs.readFileSync(welcomedPath, 'utf8')); } catch (e) {}
-            if (global.hasSentWelcome || welcomedData[botNumber]) return;
 
-            const welcomeText = `NEXORA MD\nConnected successfully.\n\nBot: ${settings.botName}\nOwner: ${settings.botOwner}\nPrefix: ${settings.prefix}\nStatus: Online and Ready\n\n${settings.footer}`;
+            try {
+              if (fs.existsSync(welcomedPath)) {
+                welcomedData = JSON.parse(fs.readFileSync(welcomedPath, 'utf8'));
+              }
+            } catch (e) {}
+
+            if (global.hasSentWelcome || welcomedData[botNumber]) {
+              return;
+            }
+
+            const currentPrefix = settings.prefix || '.';
+            const userName = settings.botOwner || 'USER';
+            const userNumber = settings.ownerNumber || Nexora.user.id.split(':')[0];
+
+            const welcomeText = `NEXORA MD
+Connected successfully.
+
+Bot: ${settings.botName}
+Owner: ${userName}
+Developer: ${settings.developerName}
+Number: ${userNumber}
+Prefix: ${currentPrefix}
+Status: Online and Ready
+Join our channel for updates.
+
+${settings.footer}`;
+
             const welcomeImages = Array.isArray(settings.welcomeImages) ? settings.welcomeImages : [];
-            const randomImage = welcomeImages.length > 0 ? welcomeImages[Math.floor(Math.random() * welcomeImages.length)] : null;
-            
+            const randomImage = welcomeImages.length > 0
+              ? welcomeImages[Math.floor(Math.random() * welcomeImages.length)]
+              : null;
+
             let imageSent = false;
+
             if (randomImage) {
               try {
                 const buffer = await fetchImageBuffer(randomImage);
-                await Nexora.sendMessage(botNumber, { image: buffer, caption: welcomeText, withChannel: true });
+                await Nexora.sendMessage(botNumber, {
+                  image: buffer,
+                  caption: welcomeText,
+                  withChannel: true
+                });
                 imageSent = true;
-              } catch (imgErr) {}
+                logger.success('Welcome message sent with image.');
+              } catch (imgErr) {
+                logger.warn(`Welcome image failed: ${imgErr.message}`);
+              }
             }
-            if (!imageSent) await Nexora.sendMessage(botNumber, { text: welcomeText, withChannel: true });
+
+            if (!imageSent) {
+              await Nexora.sendMessage(botNumber, {
+                text: welcomeText,
+                withChannel: true
+              });
+              logger.success('Welcome message sent (text only).');
+            }
 
             global.hasSentWelcome = true;
             welcomedData[botNumber] = true;
-            try { if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true }); fs.writeFileSync(welcomedPath, JSON.stringify(welcomedData, null, 2)); } catch (e) {}
-          } catch (error) { logger.error(`Welcome error: ${error.message}`); }
+            try {
+              if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
+              fs.writeFileSync(welcomedPath, JSON.stringify(welcomedData, null, 2));
+            } catch (e) {}
+
+          } catch (error) {
+            logger.error(`Welcome message error: ${error.message}`);
+          }
         }, 5000);
       }
 
       if (connection === 'close') {
-        const statusCode = lastDisconnect?.error?.output?.statusCode || lastDisconnect?.error?.statusCode;
-        
-        if (statusCode === 401 || statusCode === 403) {
-          logger.error(`[FATAL] Unauthorized/Banned. Bot is shutting down to prevent permanent ban.`);
-          process.exit(1);
+        const statusCode = lastDisconnect?.error?.output?.statusCode ||
+          lastDisconnect?.error?.statusCode;
+        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+
+        if (statusCode === DisconnectReason.loggedOut) {
+          try {
+            rmSync(sessionFolder, { recursive: true, force: true });
+            logger.warn('Session cleared. Please re-authenticate.');
+          } catch (e) {}
         }
 
-        const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
-        if (statusCode === DisconnectReason.loggedOut) {
-          try { rmSync(sessionFolder, { recursive: true, force: true }); logger.warn('Session cleared.'); } catch (e) {}
+        if (shouldReconnect) {
+          await delay(3000);
+          startNexora();
         }
-        if (shouldReconnect) { await delay(3000); startNexora(); }
       }
     });
 
-    Nexora.ev.on('group-participants.update', async (update) => { await handleGroupParticipantUpdate(Nexora, update); });
+    Nexora.ev.on('group-participants.update', async (update) => {
+      await handleGroupParticipantUpdate(Nexora, update);
+    });
+
     return Nexora;
   } catch (error) {
     logger.error(`Error starting bot: ${error.message}`);
@@ -656,7 +1094,16 @@ async function startNexora() {
   }
 }
 
-process.on('uncaughtException', (err) => { logger.error(`Uncaught Exception: ${err.message}`); });
-process.on('unhandledRejection', (err) => { if (err?.message && err.message.includes('rate-overlimit')) return; logger.error(`Unhandled Rejection: ${err?.message}`); });
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught Exception: ${err.message}`);
+});
 
-startNexora().catch(error => { logger.error(`Fatal crash: ${error.message}`); process.exit(1); });
+process.on('unhandledRejection', (err) => {
+  if (err?.message && err.message.includes('rate-overlimit')) return;
+  logger.error(`Unhandled Rejection: ${err?.message}`);
+});
+
+startNexora().catch(error => {
+  logger.error(`Fatal crash: ${error.message}`);
+  process.exit(1);
+});
