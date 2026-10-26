@@ -7,19 +7,47 @@
 const settings = require('../../settings');
 const axios = require('axios');
 const os = require('os');
+const fs = require('fs');
+const path = require('path');
 
-const START_TIME = Date.now();
-const THEME_NUMBER = 8;
 const UPDATE_INTERVAL = 2000;
 const MAX_DURATION = 60000;
+const UPTIME_FILE = path.join(process.cwd(), 'data', 'deployment_date.json');
 
 const activeSessions = new Map();
+let cachedLocation = null;
+
+// ─────────────────────────────────────────────
+// STABLE UPTIME LOGIC
+// ─────────────────────────────────────────────
+function getOrCreateDeploymentDate() {
+  try {
+    if (fs.existsSync(UPTIME_FILE)) {
+      const data = JSON.parse(fs.readFileSync(UPTIME_FILE, 'utf8'));
+      if (data && data.deployedAt) {
+        return data.deployedAt;
+      }
+    }
+  } catch (e) {}
+
+  // If file doesn't exist or is corrupt, create it now
+  const now = Date.now();
+  try {
+    if (!fs.existsSync(path.dirname(UPTIME_FILE))) {
+      fs.mkdirSync(path.dirname(UPTIME_FILE), { recursive: true });
+    }
+    fs.writeFileSync(UPTIME_FILE, JSON.stringify({ deployedAt: now }, null, 2));
+  } catch (e) {
+    console.log('[UPTIME] Failed to save deployment date:', e.message);
+  }
+  return now;
+}
+
+const START_TIME = getOrCreateDeploymentDate();
 
 // ─────────────────────────────────────────────
 // SERVER LOCATION (cached after first fetch)
 // ─────────────────────────────────────────────
-let cachedLocation = null;
-
 async function getServerLocation() {
   if (cachedLocation) return cachedLocation;
 
@@ -37,12 +65,9 @@ async function getServerLocation() {
         countryCode: res.data.countryCode || '',
         isp: res.data.isp || 'Unknown'
       };
-      console.log('[UPTIME] Server location:', cachedLocation.city, cachedLocation.country);
       return cachedLocation;
     }
-  } catch (e) {
-    console.log('[UPTIME] Location fetch failed:', e.message);
-  }
+  } catch (e) {}
 
   cachedLocation = {
     ip: 'unknown',
@@ -119,9 +144,14 @@ function formatNow() {
   });
 }
 
-// ─────────────────────────────────────────────
-// COUNT UNIQUE COMMANDS (ignore aliases)
-// ─────────────────────────────────────────────
+function formatDeployDate(timestamp) {
+  return new Date(timestamp).toLocaleString('en-GB', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+    hour12: true
+  });
+}
+
 function countUniqueCommands() {
   const uniqueNames = new Set();
   if (global.commands && typeof global.commands.forEach === 'function') {
@@ -153,6 +183,8 @@ async function fetchImageBuffer(url) {
 async function buildStatsText() {
   const uptimeMs = Date.now() - START_TIME;
   const uptimeStr = formatUptime(uptimeMs);
+  const deployStr = formatDeployDate(START_TIME);
+  
   const mem = getMemoryStats();
   const proc = getProcessMemory();
   const cpuPct = getCpuLoad();
@@ -175,7 +207,8 @@ async function buildStatsText() {
   text += `Commands: ${totalCommands}\n\n`;
 
   text += `[ UPTIME ]\n`;
-  text += `Runtime: ${uptimeStr}\n`;
+  text += `Deployed: ${deployStr}\n`;
+  text += `Active: ${uptimeStr}\n`;
   text += `Updated: ${formatNow()}\n\n`;
 
   text += `[ PROCESS ]\n`;
@@ -235,8 +268,8 @@ module.exports = {
       let sentMsg = null;
 
       try {
-        if (settings.menuThemes && settings.menuThemes[THEME_NUMBER] && settings.menuThemes[THEME_NUMBER].image) {
-          const buffer = await fetchImageBuffer(settings.menuThemes[THEME_NUMBER].image);
+        if (settings.menuThemes && settings.menuThemes[8] && settings.menuThemes[8].image) {
+          const buffer = await fetchImageBuffer(settings.menuThemes[8].image);
           sentMsg = await conn.sendMessage(chatId, {
             image: buffer,
             caption: text
@@ -251,8 +284,6 @@ module.exports = {
 
       if (!sentMsg || !sentMsg.key) return;
 
-      console.log('[UPTIME] Started live session for', chatId.split('@')[0]);
-
       const startTime = Date.now();
 
       const interval = setInterval(async () => {
@@ -260,7 +291,6 @@ module.exports = {
           if (Date.now() - startTime > MAX_DURATION) {
             clearInterval(interval);
             activeSessions.delete(chatId);
-            console.log('[UPTIME] Session ended for', chatId.split('@')[0]);
             return;
           }
 
