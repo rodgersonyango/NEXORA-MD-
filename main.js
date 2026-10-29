@@ -1,11 +1,8 @@
 /**
- * NEXORA MD - Main Handlers
- * Simple MD-style owner check (paired number = owner)
- * Public/private mode + rate limit
- * Group watchers: anti-link, anti-bad, anti-left, anti-media, anti-sticker, anti-tag, anti-bot, rpp-watchdog
- * Auto-chatbot: Omegatech Chatbot + fallbacks (raw send, no branding)
- * Silent view-once reveal: owner replies with .<emoji>
- * AFK auto-reply for mentioned/DM'd users
+ * NEXORA MD - Main Handlers (corrected)
+ * Fixes: sender normalization, silent-reveal flow, auto-chatbot gating,
+ * cached banned_groups, safe watchers, group self-welcome skip,
+ * interactive-message text extraction, unknown-command echo cap.
  */
 
 const settings = require('./settings');
@@ -21,11 +18,23 @@ const logger = require('./lib/logger');
 const cleanNumber = owner.cleanNumber;
 
 // ═══════════════════════════════════════════════════════
-// EMOJI COMMAND DETECTION
+// EMOJI COMMAND DETECTION (FIX 5: grapheme-aware)
 // ═══════════════════════════════════════════════════════
 function isEmojiCommand(text) {
   if (!text || text.length === 0) return false;
-  const emojiRegex = /^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}]+$/u;
+
+  // Grapheme-aware path (Node 16+)
+  if (typeof Intl !== 'undefined' && Intl.Segmenter) {
+    try {
+      const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
+      const graphemes = [...seg.segment(text)].map(g => g.segment);
+      if (graphemes.length === 0 || graphemes.length > 3) return false;
+      const singleEmoji = /^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}\u{2190}-\u{21FF}]+$/u;
+      return graphemes.every(g => singleEmoji.test(g));
+    } catch (e) { /* fall through */ }
+  }
+
+  const emojiRegex = /^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}]+$/u;
   return emojiRegex.test(text);
 }
 
@@ -36,7 +45,7 @@ function getBotOwnerNumber() {
 }
 
 // ═══════════════════════════════════════════════════════
-// MEDIA EXTRACTION
+// MEDIA EXTRACTION (FIX 14: include document)
 // ═══════════════════════════════════════════════════════
 function extractMedia(quoted) {
   if (!quoted) return null;
@@ -56,6 +65,7 @@ function extractMedia(quoted) {
   if (inner.imageMessage) return { type: 'image', media: inner.imageMessage, caption: inner.imageMessage.caption || '' };
   if (inner.videoMessage) return { type: 'video', media: inner.videoMessage, caption: inner.videoMessage.caption || '' };
   if (inner.audioMessage) return { type: 'audio', media: inner.audioMessage, caption: inner.audioMessage.caption || '' };
+  if (inner.documentMessage) return { type: 'document', media: inner.documentMessage, caption: inner.documentMessage.caption || inner.documentMessage.fileName || '' };
   return null;
 }
 
@@ -90,6 +100,45 @@ function writeAFK(data) {
 }
 
 // ═══════════════════════════════════════════════════════
+// BANNED GROUPS — cached (FIX 7)
+// ═══════════════════════════════════════════════════════
+let _banCache = { data: null, at: 0 };
+const BAN_TTL_MS = 60 * 1000;
+
+function getBannedGroups() {
+  const now = Date.now();
+  if (_banCache.data && now - _banCache.at < BAN_TTL_MS) return _banCache.data;
+  try {
+    const BAN_FILE = path.join(__dirname, 'data', 'banned_groups.json');
+    _banCache.data = fs.existsSync(BAN_FILE) ? JSON.parse(fs.readFileSync(BAN_FILE, 'utf8')) : [];
+  } catch (e) {
+    _banCache.data = [];
+  }
+  _banCache.at = now;
+  return _banCache.data;
+}
+
+// ═══════════════════════════════════════════════════════
+// SAFE WATCHER WRAPPER (FIX 8: surface errors once per 5min)
+// ═══════════════════════════════════════════════════════
+const _watcherErrSeen = new Map();
+
+function safeWatcher(name, fn) {
+  return async (...args) => {
+    try {
+      await fn(...args);
+    } catch (e) {
+      const now = Date.now();
+      const last = _watcherErrSeen.get(name) || 0;
+      if (now - last > 5 * 60 * 1000) {
+        _watcherErrSeen.set(name, now);
+        logger.warn(`Watcher ${name} error: ${e.message}`);
+      }
+    }
+  };
+}
+
+// ═══════════════════════════════════════════════════════
 // RAW SEND — bypasses channel branding
 // ═══════════════════════════════════════════════════════
 function rawSend(conn, jid, content, options = {}) {
@@ -98,7 +147,7 @@ function rawSend(conn, jid, content, options = {}) {
 }
 
 // ═══════════════════════════════════════════════════════
-// SILENT REVEAL — internal fallback
+// SILENT REVEAL — internal fallback (FIX 10: skip self-send)
 // ═══════════════════════════════════════════════════════
 async function silentReveal(conn, mek, chatId) {
   try {
@@ -112,10 +161,15 @@ async function silentReveal(conn, mek, chatId) {
     if (!ownerNumber) return false;
 
     const ownerJid = ownerNumber.includes('@') ? ownerNumber : ownerNumber + '@s.whatsapp.net';
+
+    // FIX 10: avoid self-send loop
+    if (ownerJid === chatId) return false;
+
     const buffer = await downloadMedia(mediaInfo);
     if (!buffer || buffer.length === 0) return false;
 
-    const sender = mek.key.participant || mek.key.remoteJid;
+    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
+                                  : (mek.key.participant || mek.key.remoteJid);
     const senderNumber = cleanNumber(sender);
 
     const caption = `SILENT REVEAL
@@ -132,9 +186,10 @@ ${settings.footer}`;
     if (mediaInfo.type === 'image') content.image = buffer;
     else if (mediaInfo.type === 'video') content.video = buffer;
     else if (mediaInfo.type === 'audio') { content.audio = buffer; content.ptt = true; }
+    else if (mediaInfo.type === 'document') { content.document = buffer; content.fileName = mediaInfo.media.fileName || 'file'; content.mimetype = mediaInfo.media.mimetype || 'application/octet-stream'; }
 
     await conn.sendMessage(ownerJid, content);
-    console.log('[MAIN-SILENTVV] Revealed to owner (fallback):', senderNumber);
+    logger.info(`[SILENTVV] Revealed to owner: ${senderNumber}`);
     return true;
   } catch (error) {
     logger.error(`Silent reveal error: ${error.message}`);
@@ -143,7 +198,7 @@ ${settings.footer}`;
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTO CHATBOT — Omegatech Chatbot + fallbacks
+// AUTO CHATBOT (FIX 3 + 11 + 12)
 // ═══════════════════════════════════════════════════════
 async function handleAutoChatBot(conn, mek) {
   try {
@@ -157,17 +212,28 @@ async function handleAutoChatBot(conn, mek) {
     if (isGroup || isStatus || isChannel) return;
     if (mek.key.fromMe) return;
 
+    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
+                                  : (mek.key.participant || mek.key.remoteJid);
+
+    // FIX 3: respect private mode
+    const currentMode = mode.getMode(settings.mode || 'public');
+    const isOwnerSender = owner.isOwner(sender, conn);
+    if (currentMode === 'private' && !isOwnerSender) return;
+
+    // FIX 11: rate limit non-owners (separate bucket)
+    if (!isOwnerSender && !rateLimit.isAllowed(String(sender) + ':bot', 5)) return;
+
     let text = '';
     if (mek.message.conversation) text = mek.message.conversation;
     else if (mek.message.extendedTextMessage) text = mek.message.extendedTextMessage.text;
+    else if (mek.message.buttonsResponseMessage) text = mek.message.buttonsResponseMessage.selectedButtonId || '';
+    else if (mek.message.listResponseMessage) text = mek.message.listResponseMessage.singleSelectReply?.selectedRowId || '';
+    else if (mek.message.templateButtonReplyMessage) text = mek.message.templateButtonReplyMessage.selectedId || '';
     else return;
 
     if (!text) return;
     if (text.startsWith(settings.prefix || '.')) return;
-    if (/^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}]+$/u.test(text.trim())) return;
-
-    const sender = mek.key.participant || mek.key.remoteJid;
-    const pushName = mek.pushName || 'User';
+    if (isEmojiCommand(text.trim())) return;
 
     try {
       await conn.sendPresenceUpdate('composing', chatId);
@@ -182,15 +248,38 @@ async function handleAutoChatBot(conn, mek) {
         reply = candidate.trim();
       }
     } catch (e) {
-      console.log('[AUTOCHATBOT] ❌ Omegatech failed:', e.message);
+      logger.warn(`[AUTOCHATBOT] Omegatech failed: ${e.message}`);
     }
 
     if (reply) {
-      await rawSend(conn, chatId, { text: reply });
+      // FIX 12: don't let 'forbidden' bubble up
+      try {
+        await rawSend(conn, chatId, { text: reply });
+      } catch (e) {
+        if (!e.message?.includes('forbidden')) {
+          logger.warn(`AutoChatBot send: ${e.message}`);
+        }
+      }
     }
   } catch (error) {
     logger.error(`Auto-ChatBot Error: ${error.message}`);
   }
+}
+
+// ═══════════════════════════════════════════════════════
+// TEXT EXTRACTOR (FIX 15)
+// ═══════════════════════════════════════════════════════
+function extractText(msg) {
+  if (!msg) return '';
+  if (msg.conversation) return msg.conversation;
+  if (msg.extendedTextMessage?.text) return msg.extendedTextMessage.text;
+  if (msg.imageMessage?.caption) return msg.imageMessage.caption;
+  if (msg.videoMessage?.caption) return msg.videoMessage.caption;
+  if (msg.documentMessage?.caption) return msg.documentMessage.caption;
+  if (msg.buttonsResponseMessage?.selectedButtonId) return msg.buttonsResponseMessage.selectedButtonId;
+  if (msg.listResponseMessage?.singleSelectReply?.selectedRowId) return msg.listResponseMessage.singleSelectReply.selectedRowId;
+  if (msg.templateButtonReplyMessage?.selectedId) return msg.templateButtonReplyMessage.selectedId;
+  return '';
 }
 
 // ═══════════════════════════════════════════════════════
@@ -204,53 +293,45 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     const chatId = mek.key.remoteJid;
     const isStatus = chatId === 'status@broadcast';
     const isChannel = chatId.includes('@newsletter');
-
     if (isStatus || isChannel) return;
 
-    // ═════════════════════════════════════════
-    // RPP WATCHDOG (BANNED GROUPS)
-    // ═════════════════════════════════════════
+    // FIX 1: normalize sender once, honoring @lid
+    const sender = conn.decodeJid
+      ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
+      : (mek.key.participant || mek.key.remoteJid);
+
+    // BANNED GROUPS WATCHDOG (FIX 7: cached read)
     if (chatId.endsWith('@g.us')) {
       try {
-        const BAN_FILE = path.join(__dirname, 'data', 'banned_groups.json');
-        if (fs.existsSync(BAN_FILE)) {
-          const banned = JSON.parse(fs.readFileSync(BAN_FILE, 'utf8'));
-          if (banned.includes(chatId)) {
-            await conn.groupLeave(chatId);
-            return; // Stop processing if group is banned
-          }
+        const banned = getBannedGroups();
+        if (Array.isArray(banned) && banned.includes(chatId)) {
+          await conn.groupLeave(chatId);
+          return;
         }
       } catch (e) {}
     }
 
-    let text = '';
-    if (mek.message.conversation) text = mek.message.conversation;
-    else if (mek.message.extendedTextMessage) text = mek.message.extendedTextMessage.text;
-    else if (mek.message.imageMessage) text = mek.message.imageMessage.caption || '';
-    else if (mek.message.videoMessage) text = mek.message.videoMessage.caption || '';
-
+    const text = extractText(mek.message);
     const prefix = settings.prefix || '.';
-    const sender = mek.key.participant || mek.key.remoteJid;
 
-    // PRIORITY 1 — AFK AUTO-REPLY
+    // ═════════════════════════════════════════
+    // PRIORITY 1 — AFK AUTO-REPLY (FIX 6: don't self-reply)
+    // ═════════════════════════════════════════
     try {
       const afkStore = readAFK();
       const senderNumCheck = cleanNumber(sender);
+      const ownerNumForAFK = cleanNumber(getBotOwnerNumber() || '');
 
-      if (afkStore[senderNumCheck]) {
+      if (afkStore[senderNumCheck] && senderNumCheck !== ownerNumForAFK) {
         delete afkStore[senderNumCheck];
         writeAFK(afkStore);
-
         if (text && !text.startsWith(prefix)) {
-          try {
-            await rawSend(conn, chatId, { text: `AFK cleared. Welcome back.` });
-          } catch (e) {}
+          try { await rawSend(conn, chatId, { text: `AFK cleared. Welcome back.` }); } catch (e) {}
         }
       }
 
       const mentioned = mek.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const quotedUser = mek.message?.extendedTextMessage?.contextInfo?.participant;
-
       const afkTargets = [...mentioned];
       if (quotedUser) afkTargets.push(quotedUser);
 
@@ -267,60 +348,57 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
       }
     } catch (e) {}
 
-    // PRIORITY 2 — SILENT VIEW-ONCE REVEAL (.emoji)
+    // ═════════════════════════════════════════
+    // PRIORITY 2 — SILENT VIEW-ONCE REVEAL (FIX 2)
+    // ═════════════════════════════════════════
     if (text && text.startsWith(prefix) && text.length > prefix.length) {
       const afterPrefixCheck = text.slice(prefix.length).trim();
 
       if (isEmojiCommand(afterPrefixCheck)) {
         const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
 
-        if (!quoted) return;
-        const mediaInfo = extractMedia(quoted);
-        if (!mediaInfo) return;
-        if (!owner.isOwner(sender, conn)) return;
-
-        let revealed = false;
-        try {
-          const silentvvPlugin = require('./plugins/owner/silentvv');
-          if (silentvvPlugin && typeof silentvvPlugin.silentRevealToOwner === 'function') {
-            revealed = await silentvvPlugin.silentRevealToOwner(conn, mek, chatId, mediaInfo);
+        if (quoted) {
+          const mediaInfo = extractMedia(quoted);
+          if (mediaInfo && owner.isOwner(sender, conn)) {
+            let revealed = false;
+            try {
+              const silentvvPlugin = require('./plugins/owner/silentvv');
+              if (silentvvPlugin && typeof silentvvPlugin.silentRevealToOwner === 'function') {
+                revealed = await silentvvPlugin.silentRevealToOwner(conn, mek, chatId, mediaInfo);
+              }
+            } catch (e) {}
+            if (!revealed) revealed = await silentReveal(conn, mek, chatId);
+            if (revealed) return;
           }
-        } catch (e) {}
-        if (!revealed) await silentReveal(conn, mek, chatId);
-        return;
+        }
+        // If not revealed, fall through to normal command parsing
       }
     }
 
-    // Auto-chatbot
+    // AUTO-CHATBOT
     try { await handleAutoChatBot(conn, mek); } catch (e) {}
 
-    // GROUP WATCHERS
+    // GROUP WATCHERS (FIX 8: safe wrappers)
     if (chatId.endsWith('@g.us')) {
-      try { const { antiLinkWatcher } = require('./plugins/group/antilink'); await antiLinkWatcher(conn, mek, chatId); } catch (e) {}
-      try { const { antiBadWatcher } = require('./plugins/group/antibad'); await antiBadWatcher(conn, mek, chatId); } catch (e) {}
-      try { const { antiMediaWatcher } = require('./plugins/group/antimedia-watcher'); await antiMediaWatcher(conn, mek, chatId); } catch (e) {}
-      try { const { antiStickerWatcher } = require('./plugins/group/antisticker-watcher'); await antiStickerWatcher(conn, mek, chatId); } catch (e) {}
-      try { const { antiTagWatcher } = require('./plugins/group/antitag-watcher'); await antiTagWatcher(conn, mek, chatId); } catch (e) {}
-      try { const { antiBotWatcher } = require('./plugins/group/antibot-watcher'); await antiBotWatcher(conn, mek, chatId); } catch (e) {}
-      try { const { muteWatcher } = require('./plugins/group/mute-watcher'); await muteWatcher(conn, mek, chatId); } catch (e) {}
+      try { const { antiLinkWatcher } = require('./plugins/group/antilink'); await safeWatcher('antilink', antiLinkWatcher)(conn, mek, chatId); } catch (e) {}
+      try { const { antiBadWatcher } = require('./plugins/group/antibad'); await safeWatcher('antibad', antiBadWatcher)(conn, mek, chatId); } catch (e) {}
+      try { const { antiMediaWatcher } = require('./plugins/group/antimedia-watcher'); await safeWatcher('antimedia', antiMediaWatcher)(conn, mek, chatId); } catch (e) {}
+      try { const { antiStickerWatcher } = require('./plugins/group/antisticker-watcher'); await safeWatcher('antisticker', antiStickerWatcher)(conn, mek, chatId); } catch (e) {}
+      try { const { antiTagWatcher } = require('./plugins/group/antitag-watcher'); await safeWatcher('antitag', antiTagWatcher)(conn, mek, chatId); } catch (e) {}
+      try { const { antiBotWatcher } = require('./plugins/group/antibot-watcher'); await safeWatcher('antibot', antiBotWatcher)(conn, mek, chatId); } catch (e) {}
+      try { const { muteWatcher } = require('./plugins/group/mute-watcher'); await safeWatcher('mute', muteWatcher)(conn, mek, chatId); } catch (e) {}
     }
 
     if (!text) return;
     if (!text.startsWith(prefix)) return;
 
     const afterPrefix = text.slice(prefix.length).trim();
-    const parts = afterPrefix.split(' ');
+    const parts = afterPrefix.split(/\s+/);
     const rawCommand = parts[0];
     const args = parts.slice(1);
 
-    if (isEmojiCommand(rawCommand)) {
-      const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-      if (quoted) {
-        const mediaInfo = extractMedia(quoted);
-        if (mediaInfo) { await silentReveal(conn, mek, chatId); return; }
-      }
-      return;
-    }
+    // FIX 2: emoji block REMOVED here — already handled above
+    if (isEmojiCommand(rawCommand)) return;
 
     const commandName = rawCommand.toLowerCase();
     const isBotOwner = owner.isOwner(sender, conn);
@@ -348,8 +426,12 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
         try { await conn.sendMessage(chatId, { react: { text: settings.reactionError, key: mek.key } }); } catch (e) {}
       }
     } else {
-      if (currentMode !== 'private') {
-        await conn.sendMessage(chatId, { text: `Unknown command: ${text}\nType ${prefix}menu` });
+      // FIX 13: don't spam unknown-command in groups; cap echo
+      if (currentMode !== 'private' && !chatId.endsWith('@g.us')) {
+        const safe = text.slice(0, 80);
+        try {
+          await conn.sendMessage(chatId, { text: `Unknown command: ${safe}\nType ${prefix}menu` });
+        } catch (e) {}
       }
     }
   } catch (error) {
@@ -358,17 +440,16 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
 }
 
 // ═══════════════════════════════════════════════════════
-// GROUP PARTICIPANT UPDATE
+// GROUP PARTICIPANT UPDATE (FIX 4: skip self-welcome)
 // ═══════════════════════════════════════════════════════
 async function handleGroupParticipantUpdate(conn, update) {
   try {
     logger.info(`Group update: ${update.id} (${update.action})`);
     try {
       const { antiLeftWatcher } = require('./plugins/group/antileft');
-      await antiLeftWatcher(conn, update);
+      await safeWatcher('antileft', antiLeftWatcher)(conn, update);
     } catch (e) {}
 
-    // WELCOME & GOODBYE HANDLER
     const dataPath = path.join(__dirname, 'data', 'group_events.json');
     let eventCfg = {};
     try {
@@ -376,14 +457,16 @@ async function handleGroupParticipantUpdate(conn, update) {
     } catch (e) {}
 
     const groupCfg = eventCfg[update.id] || {};
+    const botJid = conn.user?.id ? conn.user.id.split(':')[0] + '@s.whatsapp.net' : null;
 
-    for (const participant of update.participants) {
+    for (const participant of update.participants || []) {
+      if (botJid && participant === botJid) continue; // FIX 4
       if (update.action === 'add' && groupCfg.welcome) {
         const text = `👋 Welcome @${participant.split('@')[0]} to the group!\n\n${settings.footer}`;
-        await conn.sendMessage(update.id, { text, mentions: [participant] });
+        try { await conn.sendMessage(update.id, { text, mentions: [participant] }); } catch (e) {}
       } else if (update.action === 'remove' && groupCfg.goodbye) {
         const text = `👋 Goodbye @${participant.split('@')[0]}. We'll miss you!\n\n${settings.footer}`;
-        await conn.sendMessage(update.id, { text, mentions: [participant] });
+        try { await conn.sendMessage(update.id, { text, mentions: [participant] }); } catch (e) {}
       }
     }
   } catch (error) {
@@ -394,5 +477,9 @@ async function handleGroupParticipantUpdate(conn, update) {
 module.exports = {
   handleMessages,
   handleGroupParticipantUpdate,
-  handleAutoChatBot
+  handleAutoChatBot,
+  // exports for use by plugins that need them
+  extractMedia,
+  extractText,
+  isEmojiCommand
 };
