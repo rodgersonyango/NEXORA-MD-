@@ -66,12 +66,11 @@ global.autoReadPM = false;
 global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
 
-/* ---------- Config file paths (single source of truth) ---------- */
 const ANTIDELETE_CONFIG_PATH = './data/antidelete_config.json';
 const ANTIEDIT_CONFIG_PATH = './data/antiedit.json';
 const ANTIBLOCK_CONFIG_PATH = './data/antiblock.json';
+const STATUS_CONFIG_PATH = './data/status.json';
 
-/* ---------- Anti-delete state loader (FIXED: reads the file the command writes to) ---------- */
 function loadAntiDeleteState() {
   try {
     if (fs.existsSync(ANTIDELETE_CONFIG_PATH)) {
@@ -82,7 +81,6 @@ function loadAntiDeleteState() {
   } catch (e) {
     logger.warn(`[ANTIDELETE] Config read failed: ${e.message}`);
   }
-  // Fallback: legacy file OR settings
   try {
     if (fs.existsSync('./data/antidelete.json')) {
       const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
@@ -93,6 +91,25 @@ function loadAntiDeleteState() {
   global.antiDelete = settings.antiDelete === true;
 }
 loadAntiDeleteState();
+
+/* Status flags — reloadable at runtime so .statusreact on/off takes effect instantly */
+function loadStatusFlags() {
+  try {
+    if (fs.existsSync(STATUS_CONFIG_PATH)) {
+      const sd = JSON.parse(fs.readFileSync(STATUS_CONFIG_PATH, 'utf8'));
+      global.autoStatusFlags = {
+        seen: sd.view !== false,
+        react: sd.react === true
+      };
+      return;
+    }
+  } catch (e) {}
+  global.autoStatusFlags = {
+    seen: settings.autoStatusSeen === true,
+    react: settings.autoStatusReact === true
+  };
+}
+loadStatusFlags();
 
 try {
   if (fs.existsSync(ANTIEDIT_CONFIG_PATH)) {
@@ -168,23 +185,6 @@ try {
   }
 } catch (e) {
   global.autoChatBot = settings.autoChatBot === true;
-}
-
-try {
-  if (fs.existsSync('./data/status.json')) {
-    const sd = JSON.parse(fs.readFileSync('./data/status.json', 'utf8'));
-    global.autoStatusFlags = {
-      seen: sd.view !== false,
-      react: sd.react === true
-    };
-  } else {
-    global.autoStatusFlags = {
-      seen: settings.autoStatusSeen === true,
-      react: settings.autoStatusReact === true
-    };
-  }
-} catch (e) {
-  global.autoStatusFlags = { seen: false, react: false };
 }
 
 try {
@@ -340,13 +340,94 @@ const isSystemJid = (jid) => {
   return jid.includes('@broadcast') || jid.includes('@newsletter');
 };
 
-/* normalize a JID for store lookups */
 function normalizeJidForStore(jid) {
   if (!jid) return jid;
   try {
     if (jid.includes('@s.whatsapp.net') || jid.includes('@g.us')) return jid;
     return jidNormalizedUser(jid);
   } catch (e) { return jid; }
+}
+
+/* Resolve a status author into a valid @s.whatsapp.net JID.
+   Handles @lid by stripping to bare number only if we can't map it.
+   Returns null if we truly can't resolve. */
+function resolveStatusAuthorJid(Nexora, mek) {
+  let candidate =
+    mek.key?.participant ||
+    mek.participant ||
+    mek.key?.remoteJidAlt ||
+    null;
+
+  if (!candidate && mek.message) {
+    const keys = Object.keys(mek.message || {});
+    for (const k of keys) {
+      const inner = mek.message[k];
+      const ctx = inner?.contextInfo;
+      if (ctx?.participant) { candidate = ctx.participant; break; }
+      if (ctx?.remoteJid) { candidate = ctx.remoteJid; break; }
+    }
+  }
+
+  if (!candidate) return null;
+
+  /* Prefer Baileys' LID→PN mapping if available */
+  try {
+    if (candidate.includes('@lid') && Nexora?.signalRepository?.lidMapping?.getPNForLID) {
+      const mapped = Nexora.signalRepository.lidMapping.getPNForLID(candidate);
+      if (mapped) return mapped.includes('@') ? mapped : mapped + '@s.whatsapp.net';
+    }
+  } catch (e) {}
+
+  if (candidate.includes('@s.whatsapp.net')) return candidate;
+
+  /* Fallback: strip @lid / device and produce a best-effort PN JID */
+  const bare = String(candidate).split('@')[0].split(':')[0];
+  if (!bare) return null;
+  return bare + '@s.whatsapp.net';
+}
+
+/* Correct status reaction: use relayMessage with reactionMessage + statusJidList */
+async function reactToStatus(Nexora, mek, emoji, statusAuthorJid) {
+  const jidList = [statusAuthorJid];
+  if (Nexora.user?.id) {
+    const botJid = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
+    if (!jidList.includes(botJid)) jidList.push(botJid);
+  }
+
+  /* Path A: relayMessage — works on modern Baileys */
+  try {
+    await Nexora.relayMessage(
+      'status@broadcast',
+      {
+        reactionMessage: {
+          key: mek.key,
+          text: emoji,
+          senderTimestampMs: Date.now()
+        }
+      },
+      {
+        messageId: mek.key.id,
+        statusJidList: jidList
+      }
+    );
+    return true;
+  } catch (e) {
+    logger.warn(`[STATUSREACT] relayMessage failed: ${e.message}`);
+  }
+
+  /* Path B: sendMessage fallback with explicit react content */
+  try {
+    await Nexora.sendMessage(
+      'status@broadcast',
+      { react: { text: emoji, key: mek.key } },
+      { statusJidList: jidList }
+    );
+    return true;
+  } catch (e) {
+    logger.warn(`[STATUSREACT] sendMessage fallback failed: ${e.message}`);
+  }
+
+  return false;
 }
 
 let activeSock = null;
@@ -600,11 +681,16 @@ async function startNexora() {
           }
         } catch (error) {}
 
+        /* ═══════════════════════════════════════════════════════
+           STATUS HANDLER — view + react (FIXED)
+           Re-reads status.json each time so .statusreact on/off is instant
+        ═══════════════════════════════════════════════════════ */
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
 
-            REACTION_EMOJIS = loadReactionEmojis();
+            loadStatusFlags();               // ← fresh flags
+            REACTION_EMOJIS = loadReactionEmojis(); // ← fresh emojis
 
             const autoView = global.autoStatusFlags?.seen === true;
             const autoReact = global.autoStatusFlags?.react === true;
@@ -641,42 +727,29 @@ async function startNexora() {
 
             if (autoReact) {
               try {
-                let statusSender = mek.key.participant || mek.participant || null;
+                const statusAuthorJid = resolveStatusAuthorJid(Nexora, mek);
 
-                if (!statusSender && mek.message) {
-                  const msgKeys = Object.keys(mek.message || {});
-                  for (const k of msgKeys) {
-                    const inner = mek.message[k];
-                    if (inner && inner.contextInfo && inner.contextInfo.participant) {
-                      statusSender = inner.contextInfo.participant;
-                      break;
-                    }
-                  }
-                }
-
-                if (statusSender && REACTION_EMOJIS.length > 0) {
+                if (!statusAuthorJid) {
+                  logger.warn('[STATUSREACT] Could not resolve status author JID — skipping');
+                } else if (REACTION_EMOJIS.length === 0) {
+                  logger.warn('[STATUSREACT] No emojis configured — skipping');
+                } else {
                   const randomEmoji = REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
-
-                  const jidList = [statusSender];
-                  if (Nexora.user?.id) {
-                    const botJid = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
-                    if (!jidList.includes(botJid)) jidList.push(botJid);
-                  }
-
-                  await Nexora.sendMessage(
-                    'status@broadcast',
-                    { react: { text: randomEmoji, key: mek.key } },
-                    { statusJidList: jidList }
-                  );
+                  const ok = await reactToStatus(Nexora, mek, randomEmoji, statusAuthorJid);
+                  if (!ok) logger.warn('[STATUSREACT] Reaction failed on all paths');
                 }
               } catch (e) {
                 if (e.message?.includes('rate-overlimit')) {
                   await new Promise(r => setTimeout(r, 2000));
+                } else {
+                  logger.warn(`[STATUSREACT] Error: ${e.message}`);
                 }
               }
             }
           }
-        } catch (error) {}
+        } catch (error) {
+          logger.error(`Status handler: ${error.message}`);
+        }
 
         try {
           if (chatId !== CHANNEL_ID) return;
@@ -697,21 +770,14 @@ async function startNexora() {
       }
     });
 
-    /* ═══════════════════════════════════════════════════════
-       MESSAGES.UPDATE — ANTIDELETE + ANTIEDIT
-       FIXED: reads antidelete_config.json directly (single source of truth),
-       normalizes JIDs, falls back to completeMessageCache.
-    ═══════════════════════════════════════════════════════ */
     Nexora.ev.on('messages.update', async (updates) => {
       try {
         for (const update of updates) {
           if (!update.update) continue;
 
-          /* ---------- ANTI-DELETE ---------- */
           const protocol = update.update.protocolMessage;
 
           if (protocol && protocol.type === 0) {
-            // Always re-read config so .antidelete on/off is instant
             let adEnabled = false;
             let adDest = 'dm';
             try {
@@ -735,20 +801,17 @@ async function startNexora() {
             const rawJid = key.remoteJid;
             const normalizedJid = normalizeJidForStore(rawJid);
 
-            /* 1. Try store lookup (normalized + raw) */
             let originalMsg = null;
             try { originalMsg = await store.loadMessage(normalizedJid, key.id); } catch (e) {}
             if (!originalMsg || !originalMsg.message) {
               try { originalMsg = await store.loadMessage(rawJid, key.id); } catch (e) {}
             }
 
-            /* 2. Fallback: scan store.messages[chatId] directly */
             if ((!originalMsg || !originalMsg.message) && store.messages) {
               const bucket = store.messages[normalizedJid] || store.messages[rawJid];
               if (bucket && bucket[key.id]) originalMsg = bucket[key.id];
             }
 
-            /* 3. Fallback: fetch recent from WhatsApp */
             if (!originalMsg || !originalMsg.message) {
               try {
                 const messages = await Nexora.loadMessages(normalizedJid, 100);
@@ -777,7 +840,6 @@ Time: ${new Date().toLocaleString()}
 
 RECOVERED MESSAGE:`;
 
-            /* Resolve target JID */
             let ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
             let targetJid;
             if (adDest === 'group') {
@@ -792,7 +854,6 @@ RECOVERED MESSAGE:`;
                 : ownerNum + '@s.whatsapp.net';
             }
 
-            /* Send header */
             try {
               await Nexora.sendMessage(targetJid, { text: caption, mentions: [sender] });
             } catch (e) {
@@ -800,7 +861,6 @@ RECOVERED MESSAGE:`;
               continue;
             }
 
-            /* Try to forward the original content */
             let forwarded = false;
             try {
               await Nexora.copyNForward(targetJid, originalMsg, true);
@@ -809,12 +869,9 @@ RECOVERED MESSAGE:`;
               logger.warn(`[ANTIDELETE] copyNForward failed: ${e.message}`);
             }
 
-            /* Fallback: manually rebuild text / media */
             if (!forwarded) {
               try {
                 const m = originalMsg.message;
-
-                /* Text-only fallback */
                 const textContent =
                   m.conversation ||
                   m.extendedTextMessage?.text ||
@@ -865,7 +922,6 @@ RECOVERED MESSAGE:`;
             }
           }
 
-          /* ---------- ANTI-EDIT ---------- */
           if (global.antiEdit) {
             const editedMessage = update.update.message?.editedMessage;
             if (!editedMessage) continue;
@@ -1072,8 +1128,9 @@ RECOVERED MESSAGE:`;
         logger.info(`Owner    : ${settings.botOwner}`);
         logger.success('Connected.');
 
-        /* Reload antidelete config after connect (in case command wrote it while offline) */
         loadAntiDeleteState();
+        loadStatusFlags();
+        REACTION_EMOJIS = loadReactionEmojis();
 
         try {
           const paired = owner.getPairedNumber ? owner.getPairedNumber() : '';
