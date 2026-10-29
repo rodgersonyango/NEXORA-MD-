@@ -66,22 +66,37 @@ global.autoReadPM = false;
 global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
 
-/* ---------- State loaders (explicit defaults, no accidental enabling) ---------- */
+/* ---------- Config file paths (single source of truth) ---------- */
+const ANTIDELETE_CONFIG_PATH = './data/antidelete_config.json';
+const ANTIEDIT_CONFIG_PATH = './data/antiedit.json';
+const ANTIBLOCK_CONFIG_PATH = './data/antiblock.json';
 
-try {
-  if (fs.existsSync('./data/antidelete.json')) {
-    const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
-    global.antiDelete = adData.enabled !== false;
-  } else {
-    global.antiDelete = settings.antiDelete === true;
+/* ---------- Anti-delete state loader (FIXED: reads the file the command writes to) ---------- */
+function loadAntiDeleteState() {
+  try {
+    if (fs.existsSync(ANTIDELETE_CONFIG_PATH)) {
+      const cfg = JSON.parse(fs.readFileSync(ANTIDELETE_CONFIG_PATH, 'utf8'));
+      global.antiDelete = cfg.enabled === true;
+      return;
+    }
+  } catch (e) {
+    logger.warn(`[ANTIDELETE] Config read failed: ${e.message}`);
   }
-} catch (e) {
+  // Fallback: legacy file OR settings
+  try {
+    if (fs.existsSync('./data/antidelete.json')) {
+      const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
+      global.antiDelete = adData.enabled === true;
+      return;
+    }
+  } catch (e) {}
   global.antiDelete = settings.antiDelete === true;
 }
+loadAntiDeleteState();
 
 try {
-  if (fs.existsSync('./data/antiedit.json')) {
-    const aeData = JSON.parse(fs.readFileSync('./data/antiedit.json', 'utf8'));
+  if (fs.existsSync(ANTIEDIT_CONFIG_PATH)) {
+    const aeData = JSON.parse(fs.readFileSync(ANTIEDIT_CONFIG_PATH, 'utf8'));
     global.antiEdit = aeData.enabled === true;
   } else {
     global.antiEdit = false;
@@ -91,8 +106,8 @@ try {
 }
 
 try {
-  if (fs.existsSync('./data/antiblock.json')) {
-    const abData = JSON.parse(fs.readFileSync('./data/antiblock.json', 'utf8'));
+  if (fs.existsSync(ANTIBLOCK_CONFIG_PATH)) {
+    const abData = JSON.parse(fs.readFileSync(ANTIBLOCK_CONFIG_PATH, 'utf8'));
     global.antiBlock = abData.enabled === true;
   } else {
     global.antiBlock = false;
@@ -183,7 +198,6 @@ try {
   global.ghostMode = false;
 }
 
-/* antiCall: explicit check — no more accidental enabling when settings.antiCall is undefined */
 try {
   if (fs.existsSync('./data/anticall.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/anticall.json', 'utf8'));
@@ -292,7 +306,6 @@ setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000);
 const processedMessages = new Set();
 setInterval(() => processedMessages.clear(), 3 * 60 * 1000);
 
-/* RAM restart protection — 3 consecutive strikes before exit */
 let highMemCount = 0;
 setInterval(() => {
   const used = process.memoryUsage().rss / 1024 / 1024;
@@ -327,16 +340,15 @@ const isSystemJid = (jid) => {
   return jid.includes('@broadcast') || jid.includes('@newsletter');
 };
 
-function loadCallMessages() {
+/* normalize a JID for store lookups */
+function normalizeJidForStore(jid) {
+  if (!jid) return jid;
   try {
-    const data = fs.readFileSync('./data/call_messages.json', 'utf8');
-    return JSON.parse(data);
-  } catch (e) {
-    return {};
-  }
+    if (jid.includes('@s.whatsapp.net') || jid.includes('@g.us')) return jid;
+    return jidNormalizedUser(jid);
+  } catch (e) { return jid; }
 }
 
-/* Reconnect guard + tracked socket — prevents listener leaks on retries */
 let activeSock = null;
 let isReconnecting = false;
 
@@ -398,7 +410,6 @@ async function startNexora() {
 
     const baseSend = Nexora.sendMessage.bind(Nexora);
 
-    /* Only cache outgoing when needed (antiDelete / antiEdit) */
     const _origRelayMessage = Nexora.relayMessage.bind(Nexora);
     Nexora.relayMessage = async (jid, message, options = {}) => {
       const result = await _origRelayMessage(jid, message, options);
@@ -420,8 +431,6 @@ async function startNexora() {
 
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        /* Only strip 'quoted' when the quoted msg belongs to a different chat
-           (that's the real stuck-wait cause) — never blanket-strip replies */
         if (content?.text && options.quoted) {
           const qJid = options.quoted?.key?.remoteJid;
           if (!qJid || qJid !== jid || !options.quoted?.message) {
@@ -485,7 +494,6 @@ async function startNexora() {
     Nexora.sendMessage = wrapSend(wipeSend, settings);
     global.rawSendMessage = baseSend;
 
-    /* Invalidate owner creds cache whenever creds are saved (fresh pairing) */
     Nexora.ev.on('creds.update', async () => {
       await saveCreds();
       try { owner.invalidateCredsCache?.(); } catch (e) {}
@@ -498,7 +506,6 @@ async function startNexora() {
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
 
-        /* Cache incoming only when antiDelete/antiEdit is on (CPU save) */
         try {
           if ((global.antiDelete || global.antiEdit) &&
               mek?.key?.remoteJid && mek?.key?.id && mek?.message) {
@@ -528,8 +535,8 @@ async function startNexora() {
             messageTimestamp: mek.messageTimestamp
           };
           const keys = Object.keys(store.messages[chatId]);
-          if (keys.length > 200) {
-            const toDelete = keys.slice(0, keys.length - 200);
+          if (keys.length > 500) {
+            const toDelete = keys.slice(0, keys.length - 500);
             toDelete.forEach(k => delete store.messages[chatId][k]);
           }
         } catch (e) {}
@@ -690,76 +697,175 @@ async function startNexora() {
       }
     });
 
+    /* ═══════════════════════════════════════════════════════
+       MESSAGES.UPDATE — ANTIDELETE + ANTIEDIT
+       FIXED: reads antidelete_config.json directly (single source of truth),
+       normalizes JIDs, falls back to completeMessageCache.
+    ═══════════════════════════════════════════════════════ */
     Nexora.ev.on('messages.update', async (updates) => {
       try {
         for (const update of updates) {
           if (!update.update) continue;
 
+          /* ---------- ANTI-DELETE ---------- */
           const protocol = update.update.protocolMessage;
 
-          /* Anti-delete: skip own deletes */
-          if (global.antiDelete && protocol && protocol.type === 0) {
+          if (protocol && protocol.type === 0) {
+            // Always re-read config so .antidelete on/off is instant
+            let adEnabled = false;
+            let adDest = 'dm';
+            try {
+              if (fs.existsSync(ANTIDELETE_CONFIG_PATH)) {
+                const cfg = JSON.parse(fs.readFileSync(ANTIDELETE_CONFIG_PATH, 'utf8'));
+                adEnabled = cfg.enabled === true;
+                adDest = cfg.dest === 'group' ? 'group' : 'dm';
+              } else {
+                adEnabled = global.antiDelete === true;
+              }
+            } catch (e) {
+              adEnabled = global.antiDelete === true;
+            }
+
+            if (!adEnabled) continue;
+
             const key = protocol.key;
             if (!key) continue;
             if (key.fromMe) continue;
 
-            let originalMsg = await store.loadMessage(key.remoteJid, key.id);
+            const rawJid = key.remoteJid;
+            const normalizedJid = normalizeJidForStore(rawJid);
 
-            if (!originalMsg) {
+            /* 1. Try store lookup (normalized + raw) */
+            let originalMsg = null;
+            try { originalMsg = await store.loadMessage(normalizedJid, key.id); } catch (e) {}
+            if (!originalMsg || !originalMsg.message) {
+              try { originalMsg = await store.loadMessage(rawJid, key.id); } catch (e) {}
+            }
+
+            /* 2. Fallback: scan store.messages[chatId] directly */
+            if ((!originalMsg || !originalMsg.message) && store.messages) {
+              const bucket = store.messages[normalizedJid] || store.messages[rawJid];
+              if (bucket && bucket[key.id]) originalMsg = bucket[key.id];
+            }
+
+            /* 3. Fallback: fetch recent from WhatsApp */
+            if (!originalMsg || !originalMsg.message) {
               try {
-                const messages = await Nexora.loadMessages(key.remoteJid, 50);
-                originalMsg = messages.find(m => m.key?.id === key.id);
+                const messages = await Nexora.loadMessages(normalizedJid, 100);
+                originalMsg = messages.find(m => m?.key?.id === key.id);
               } catch (e) {}
             }
 
-            if (!originalMsg || !originalMsg.key || !originalMsg.message) continue;
+            if (!originalMsg || !originalMsg.message) {
+              logger.warn(`[ANTIDELETE] Could not find original message ${key.id} in ${normalizedJid}`);
+              continue;
+            }
 
-            const sender = key.participant || key.remoteJid;
-            const senderName = await Nexora.getName(sender) || sender.split('@')[0];
+            const msgKey = originalMsg.key || key;
+            const sender = msgKey.participant || msgKey.remoteJid;
 
-            const caption = `ANTI DELETE DETECTED
+            let senderName = 'Unknown';
+            try { senderName = await Nexora.getName(sender) || sender.split('@')[0]; }
+            catch { senderName = String(sender).split('@')[0]; }
+
+            const caption = `🛡️ ANTI-DELETE DETECTED
 
 User: ${senderName}
-Number: ${sender.split('@')[0]}
+Number: ${String(sender).split('@')[0]}
+Chat: ${String(normalizedJid).split('@')[0]}
 Time: ${new Date().toLocaleString()}
 
 RECOVERED MESSAGE:`;
 
-            let destCfg = 'dm';
-            try {
-              const adPath = './data/antidelete_config.json';
-              if (fs.existsSync(adPath)) {
-                const c = JSON.parse(fs.readFileSync(adPath, 'utf8'));
-                if (c.dest === 'group') destCfg = 'group';
-              }
-            } catch (e) {}
-
-            /* Safe targetJid — no double @s.whatsapp.net */
+            /* Resolve target JID */
             let ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
             let targetJid;
-            if (destCfg === 'group') {
-              targetJid = key.remoteJid;
+            if (adDest === 'group') {
+              targetJid = normalizedJid;
             } else {
-              if (!ownerNum) continue;
-              targetJid = ownerNum.includes('@') ? ownerNum : ownerNum + '@s.whatsapp.net';
+              if (!ownerNum) {
+                logger.warn('[ANTIDELETE] No owner number — cannot forward to DM');
+                continue;
+              }
+              targetJid = String(ownerNum).includes('@')
+                ? ownerNum
+                : ownerNum + '@s.whatsapp.net';
             }
 
-            await Nexora.sendMessage(targetJid, {
-              text: caption,
-              mentions: [sender]
-            });
+            /* Send header */
+            try {
+              await Nexora.sendMessage(targetJid, { text: caption, mentions: [sender] });
+            } catch (e) {
+              logger.error(`[ANTIDELETE] Header send failed: ${e.message}`);
+              continue;
+            }
 
+            /* Try to forward the original content */
+            let forwarded = false;
             try {
               await Nexora.copyNForward(targetJid, originalMsg, true);
-            } catch (forwardError) {
-              if (originalMsg.message?.conversation) {
-                await Nexora.sendMessage(targetJid, {
-                  text: `Recovered Text:\n${originalMsg.message.conversation}`
-                });
+              forwarded = true;
+            } catch (e) {
+              logger.warn(`[ANTIDELETE] copyNForward failed: ${e.message}`);
+            }
+
+            /* Fallback: manually rebuild text / media */
+            if (!forwarded) {
+              try {
+                const m = originalMsg.message;
+
+                /* Text-only fallback */
+                const textContent =
+                  m.conversation ||
+                  m.extendedTextMessage?.text ||
+                  m.imageMessage?.caption ||
+                  m.videoMessage?.caption ||
+                  m.documentMessage?.caption ||
+                  null;
+
+                if (textContent) {
+                  await Nexora.sendMessage(targetJid, { text: textContent });
+                  forwarded = true;
+                } else if (m.imageMessage || m.videoMessage || m.audioMessage || m.documentMessage) {
+                  const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
+                  let mediaType, mediaMsg;
+                  if (m.imageMessage) { mediaType = 'image'; mediaMsg = m.imageMessage; }
+                  else if (m.videoMessage) { mediaType = 'video'; mediaMsg = m.videoMessage; }
+                  else if (m.audioMessage) { mediaType = 'audio'; mediaMsg = m.audioMessage; }
+                  else { mediaType = 'document'; mediaMsg = m.documentMessage; }
+
+                  const stream = await downloadContentFromMessage(mediaMsg, mediaType);
+                  const chunks = [];
+                  for await (const chunk of stream) chunks.push(chunk);
+                  const buffer = Buffer.concat(chunks);
+
+                  if (buffer.length > 0) {
+                    const content = { caption: mediaMsg.caption || '' };
+                    content[mediaType] = buffer;
+                    if (mediaType === 'document') {
+                      content.fileName = mediaMsg.fileName || 'file';
+                      content.mimetype = mediaMsg.mimetype || 'application/octet-stream';
+                    }
+                    if (mediaType === 'audio' && mediaMsg.ptt) content.ptt = true;
+                    await Nexora.sendMessage(targetJid, content);
+                    forwarded = true;
+                  }
+                }
+              } catch (e) {
+                logger.warn(`[ANTIDELETE] Manual forward failed: ${e.message}`);
               }
+            }
+
+            if (!forwarded) {
+              try {
+                await Nexora.sendMessage(targetJid, {
+                  text: '[Could not recover content — message was not in cache]'
+                });
+              } catch (e) {}
             }
           }
 
+          /* ---------- ANTI-EDIT ---------- */
           if (global.antiEdit) {
             const editedMessage = update.update.message?.editedMessage;
             if (!editedMessage) continue;
@@ -771,7 +877,8 @@ RECOVERED MESSAGE:`;
             if (!chatId || chatId.endsWith('@g.us')) continue;
             if (chatId === 'status@broadcast' || chatId.includes('@newsletter')) continue;
 
-            let originalMsg = await store.loadMessage(chatId, key.id);
+            let originalMsg = null;
+            try { originalMsg = await store.loadMessage(chatId, key.id); } catch (e) {}
 
             const sender = key.participant || key.remoteJid;
             const senderName = await Nexora.getName(sender) || sender.split('@')[0];
@@ -813,12 +920,10 @@ RECOVERED MESSAGE:`;
       }
     });
 
-    /* groups.update no longer tries promote/demote (that event doesn't carry it) */
     Nexora.ev.on('groups.update', async (updates) => {
       for (const update of updates) {
         try {
           if (!update?.id) continue;
-          /* placeholder: hook subject/desc/setting-change logic here if desired */
         } catch (e) {}
       }
     });
@@ -899,7 +1004,6 @@ RECOVERED MESSAGE:`;
       }
     });
 
-    /* decodeJid — no stateful 'g' flag */
     Nexora.decodeJid = (jid) => {
       if (!jid) return jid;
       if (/:\d+@/i.test(jid)) {
@@ -909,7 +1013,6 @@ RECOVERED MESSAGE:`;
       return jid;
     };
 
-    /* getName — guards Nexora.user */
     Nexora.getName = (jid, withoutContact = false) => {
       let id = Nexora.decodeJid(jid);
       withoutContact = Nexora.withoutContact || withoutContact;
@@ -931,7 +1034,6 @@ RECOVERED MESSAGE:`;
     Nexora.ev.on('connection.update', async (s) => {
       const { connection, lastDisconnect, qr } = s;
 
-      /* Pairing code only on 'connecting' */
       if (pairingCode && !Nexora.authState.creds.registered && !pairingDone && connection === 'connecting') {
         pairingDone = true;
         let phoneNumber = settings.ownerNumber || '';
@@ -969,6 +1071,9 @@ RECOVERED MESSAGE:`;
         logger.info(`Bot name : ${settings.botName}`);
         logger.info(`Owner    : ${settings.botOwner}`);
         logger.success('Connected.');
+
+        /* Reload antidelete config after connect (in case command wrote it while offline) */
+        loadAntiDeleteState();
 
         try {
           const paired = owner.getPairedNumber ? owner.getPairedNumber() : '';
@@ -1054,7 +1159,6 @@ Join our channel for updates.
 
 ${settings.footer}`;
 
-            /* 'withChannel' is invalid in Baileys — use contextInfo */
             const channelContext = settings.channelId ? {
               forwardingScore: 999,
               isForwarded: true,
@@ -1121,7 +1225,6 @@ ${settings.footer}`;
           } catch (e) {}
         }
 
-        /* Prevent listener leak / duplicate handlers on reconnect */
         if (shouldReconnect && !isReconnecting) {
           isReconnecting = true;
           try {
