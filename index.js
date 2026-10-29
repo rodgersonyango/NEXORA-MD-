@@ -66,7 +66,7 @@ global.autoReadPM = false;
 global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
 
-/* ---------- State loaders (FIX: explicit defaults, no accidental enabling) ---------- */
+/* ---------- State loaders (explicit defaults, no accidental enabling) ---------- */
 
 try {
   if (fs.existsSync('./data/antidelete.json')) {
@@ -183,7 +183,7 @@ try {
   global.ghostMode = false;
 }
 
-/* FIX: antiCall no longer enabled accidentally when settings.antiCall is undefined */
+/* antiCall: explicit check — no more accidental enabling when settings.antiCall is undefined */
 try {
   if (fs.existsSync('./data/anticall.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/anticall.json', 'utf8'));
@@ -292,7 +292,7 @@ setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000);
 const processedMessages = new Set();
 setInterval(() => processedMessages.clear(), 3 * 60 * 1000);
 
-/* FIX: RAM restart loop protection */
+/* RAM restart protection — 3 consecutive strikes before exit */
 let highMemCount = 0;
 setInterval(() => {
   const used = process.memoryUsage().rss / 1024 / 1024;
@@ -336,7 +336,7 @@ function loadCallMessages() {
   }
 }
 
-/* FIX: reconnect guard + tracked socket to prevent listener leaks */
+/* Reconnect guard + tracked socket — prevents listener leaks on retries */
 let activeSock = null;
 let isReconnecting = false;
 
@@ -398,7 +398,7 @@ async function startNexora() {
 
     const baseSend = Nexora.sendMessage.bind(Nexora);
 
-    /* FIX: only cache outgoing when needed */
+    /* Only cache outgoing when needed (antiDelete / antiEdit) */
     const _origRelayMessage = Nexora.relayMessage.bind(Nexora);
     Nexora.relayMessage = async (jid, message, options = {}) => {
       const result = await _origRelayMessage(jid, message, options);
@@ -420,8 +420,8 @@ async function startNexora() {
 
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        /* FIX: only strip 'quoted' when the quoted message belongs to a DIFFERENT chat
-           (that's what actually causes the stuck-wait bubble), never blanket-strip. */
+        /* Only strip 'quoted' when the quoted msg belongs to a different chat
+           (that's the real stuck-wait cause) — never blanket-strip replies */
         if (content?.text && options.quoted) {
           const qJid = options.quoted?.key?.remoteJid;
           if (!qJid || qJid !== jid || !options.quoted?.message) {
@@ -485,7 +485,11 @@ async function startNexora() {
     Nexora.sendMessage = wrapSend(wipeSend, settings);
     global.rawSendMessage = baseSend;
 
-    Nexora.ev.on('creds.update', saveCreds);
+    /* Invalidate owner creds cache whenever creds are saved (fresh pairing) */
+    Nexora.ev.on('creds.update', async () => {
+      await saveCreds();
+      try { owner.invalidateCredsCache?.(); } catch (e) {}
+    });
     store.bind(Nexora.ev);
 
     Nexora.ev.on('messages.upsert', async chatUpdate => {
@@ -494,7 +498,7 @@ async function startNexora() {
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
 
-        /* FIX: only cache incoming when antidelete/antiedit is on */
+        /* Cache incoming only when antiDelete/antiEdit is on (CPU save) */
         try {
           if ((global.antiDelete || global.antiEdit) &&
               mek?.key?.remoteJid && mek?.key?.id && mek?.message) {
@@ -693,7 +697,7 @@ async function startNexora() {
 
           const protocol = update.update.protocolMessage;
 
-          /* FIX: skip own deletes in anti-delete forward */
+          /* Anti-delete: skip own deletes */
           if (global.antiDelete && protocol && protocol.type === 0) {
             const key = protocol.key;
             if (!key) continue;
@@ -730,7 +734,7 @@ RECOVERED MESSAGE:`;
               }
             } catch (e) {}
 
-            /* FIX: safe @s.whatsapp.net concat, no double-domain */
+            /* Safe targetJid — no double @s.whatsapp.net */
             let ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
             let targetJid;
             if (destCfg === 'group') {
@@ -809,13 +813,12 @@ RECOVERED MESSAGE:`;
       }
     });
 
-    /* FIX: groups.update no longer tries promote/demote (that was dead code).
-       Anti-promote/anti-demote handled in group-participants.update below. */
+    /* groups.update no longer tries promote/demote (that event doesn't carry it) */
     Nexora.ev.on('groups.update', async (updates) => {
       for (const update of updates) {
         try {
-          /* placeholder: react to subject/desc/setting changes if you want */
           if (!update?.id) continue;
+          /* placeholder: hook subject/desc/setting-change logic here if desired */
         } catch (e) {}
       }
     });
@@ -831,7 +834,6 @@ RECOVERED MESSAGE:`;
           }
         } catch (e) {}
 
-        /* FIX: allowlist so saved contacts / owner never get bot spam */
         const callWhitelist = Array.isArray(settings.callWhitelist) ? settings.callWhitelist : [];
 
         for (const call of calls) {
@@ -897,7 +899,7 @@ RECOVERED MESSAGE:`;
       }
     });
 
-    /* FIX: remove stateful 'g' flag from decodeJid regex */
+    /* decodeJid — no stateful 'g' flag */
     Nexora.decodeJid = (jid) => {
       if (!jid) return jid;
       if (/:\d+@/i.test(jid)) {
@@ -907,7 +909,7 @@ RECOVERED MESSAGE:`;
       return jid;
     };
 
-    /* FIX: guard Nexora.user access in getName */
+    /* getName — guards Nexora.user */
     Nexora.getName = (jid, withoutContact = false) => {
       let id = Nexora.decodeJid(jid);
       withoutContact = Nexora.withoutContact || withoutContact;
@@ -929,7 +931,7 @@ RECOVERED MESSAGE:`;
     Nexora.ev.on('connection.update', async (s) => {
       const { connection, lastDisconnect, qr } = s;
 
-      /* FIX: pairing code only on 'connecting' (not on 'open' — too late) */
+      /* Pairing code only on 'connecting' */
       if (pairingCode && !Nexora.authState.creds.registered && !pairingDone && connection === 'connecting') {
         pairingDone = true;
         let phoneNumber = settings.ownerNumber || '';
@@ -1052,7 +1054,7 @@ Join our channel for updates.
 
 ${settings.footer}`;
 
-            /* FIX: withChannel is invalid in Baileys — use contextInfo instead */
+            /* 'withChannel' is invalid in Baileys — use contextInfo */
             const channelContext = settings.channelId ? {
               forwardingScore: 999,
               isForwarded: true,
@@ -1114,11 +1116,12 @@ ${settings.footer}`;
         if (statusCode === DisconnectReason.loggedOut) {
           try {
             rmSync(sessionFolder, { recursive: true, force: true });
+            try { owner.invalidateCredsCache?.(); } catch (e) {}
             logger.warn('Session cleared. Please re-authenticate.');
           } catch (e) {}
         }
 
-        /* FIX: prevent listener leak / duplicate handlers on reconnect */
+        /* Prevent listener leak / duplicate handlers on reconnect */
         if (shouldReconnect && !isReconnecting) {
           isReconnecting = true;
           try {
@@ -1134,7 +1137,6 @@ ${settings.footer}`;
     });
 
     Nexora.ev.on('group-participants.update', async (update) => {
-      /* FIX: anti-promote/anti-demote moved here (correct event) */
       try {
         await handleGroupParticipantUpdate(Nexora, update);
       } catch (e) {
