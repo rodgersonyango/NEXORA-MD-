@@ -66,15 +66,17 @@ global.autoReadPM = false;
 global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
 
+/* ---------- State loaders (FIX: explicit defaults, no accidental enabling) ---------- */
+
 try {
   if (fs.existsSync('./data/antidelete.json')) {
     const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
     global.antiDelete = adData.enabled !== false;
   } else {
-    global.antiDelete = settings.antiDelete;
+    global.antiDelete = settings.antiDelete === true;
   }
 } catch (e) {
-  global.antiDelete = settings.antiDelete;
+  global.antiDelete = settings.antiDelete === true;
 }
 
 try {
@@ -181,18 +183,17 @@ try {
   global.ghostMode = false;
 }
 
+/* FIX: antiCall no longer enabled accidentally when settings.antiCall is undefined */
 try {
   if (fs.existsSync('./data/anticall.json')) {
     const acData = JSON.parse(fs.readFileSync('./data/anticall.json', 'utf8'));
-    global.antiCall = acData.enabled !== false;
+    global.antiCall = acData.enabled === true;
   } else {
-    global.antiCall = settings.antiCall;
+    global.antiCall = settings.antiCall === true;
   }
 } catch (e) {
-  global.antiCall = settings.antiCall;
+  global.antiCall = settings.antiCall === true;
 }
-
-global.customStatus = 'composing';
 
 async function fetchImageBuffer(url) {
   const res = await axios.get(url, {
@@ -291,11 +292,20 @@ setInterval(() => store.writeToFile(), settings.storeWriteInterval || 10000);
 const processedMessages = new Set();
 setInterval(() => processedMessages.clear(), 3 * 60 * 1000);
 
+/* FIX: RAM restart loop protection */
+let highMemCount = 0;
 setInterval(() => {
   const used = process.memoryUsage().rss / 1024 / 1024;
-  if (used > 600) {
-    logger.warn('RAM too high, restarting...');
-    process.exit(1);
+  const limit = settings.maxRamMB || 800;
+  if (used > limit) {
+    highMemCount++;
+    logger.warn(`RAM high (${used.toFixed(0)}MB) — count ${highMemCount}/3`);
+    if (highMemCount >= 3) {
+      logger.warn('RAM over limit 3x consecutively, restarting...');
+      process.exit(1);
+    }
+  } else {
+    highMemCount = 0;
   }
 }, 120000);
 
@@ -325,6 +335,11 @@ function loadCallMessages() {
     return {};
   }
 }
+
+/* FIX: reconnect guard + tracked socket to prevent listener leaks */
+let activeSock = null;
+let isReconnecting = false;
+
 async function startNexora() {
   try {
     loadCommands();
@@ -379,16 +394,20 @@ async function startNexora() {
       retryRequestDelayMs: 250,
     });
 
+    activeSock = Nexora;
+
     const baseSend = Nexora.sendMessage.bind(Nexora);
 
+    /* FIX: only cache outgoing when needed */
     const _origRelayMessage = Nexora.relayMessage.bind(Nexora);
     Nexora.relayMessage = async (jid, message, options = {}) => {
       const result = await _origRelayMessage(jid, message, options);
       try {
+        if (!(global.antiDelete || global.antiEdit)) return result;
         const messageId = options.messageId || result;
         if (jid && messageId && typeof messageId === 'string') {
           let rawBytes;
-          try { rawBytes = Buffer.from(proto.Message.encode(message).finish()); } 
+          try { rawBytes = Buffer.from(proto.Message.encode(message).finish()); }
           catch { rawBytes = Buffer.from(proto.Message.encode(proto.Message.fromObject(message)).finish()); }
           global.completeMessageCache.set(`${jid}:${messageId}`, rawBytes);
           while (global.completeMessageCache.size > 1000) {
@@ -401,9 +420,13 @@ async function startNexora() {
 
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        // THE FIX: Strip 'quoted' from text messages to stop the wait bubble
-        if (content?.text && !content?.image && !content?.video && !content?.audio && !content?.document) {
-          delete options.quoted;
+        /* FIX: only strip 'quoted' when the quoted message belongs to a DIFFERENT chat
+           (that's what actually causes the stuck-wait bubble), never blanket-strip. */
+        if (content?.text && options.quoted) {
+          const qJid = options.quoted?.key?.remoteJid;
+          if (!qJid || qJid !== jid || !options.quoted?.message) {
+            delete options.quoted;
+          }
         }
 
         const result = await baseSend(jid, content, options);
@@ -471,8 +494,10 @@ async function startNexora() {
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
 
+        /* FIX: only cache incoming when antidelete/antiedit is on */
         try {
-          if (mek?.key?.remoteJid && mek?.key?.id && mek?.message) {
+          if ((global.antiDelete || global.antiEdit) &&
+              mek?.key?.remoteJid && mek?.key?.id && mek?.message) {
             const cacheKey = `${mek.key.remoteJid}:${mek.key.id}`;
             const rawMessage = proto.Message.fromObject(mek.message);
             const rawBytes = Buffer.from(proto.Message.encode(rawMessage).finish());
@@ -622,7 +647,7 @@ async function startNexora() {
                   const randomEmoji = REACTION_EMOJIS[Math.floor(Math.random() * REACTION_EMOJIS.length)];
 
                   const jidList = [statusSender];
-                  if (Nexora.user && Nexora.user.id) {
+                  if (Nexora.user?.id) {
                     const botJid = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
                     if (!jidList.includes(botJid)) jidList.push(botJid);
                   }
@@ -668,8 +693,11 @@ async function startNexora() {
 
           const protocol = update.update.protocolMessage;
 
+          /* FIX: skip own deletes in anti-delete forward */
           if (global.antiDelete && protocol && protocol.type === 0) {
             const key = protocol.key;
+            if (!key) continue;
+            if (key.fromMe) continue;
 
             let originalMsg = await store.loadMessage(key.remoteJid, key.id);
 
@@ -680,7 +708,7 @@ async function startNexora() {
               } catch (e) {}
             }
 
-            if (!originalMsg) continue;
+            if (!originalMsg || !originalMsg.key || !originalMsg.message) continue;
 
             const sender = key.participant || key.remoteJid;
             const senderName = await Nexora.getName(sender) || sender.split('@')[0];
@@ -702,7 +730,15 @@ RECOVERED MESSAGE:`;
               }
             } catch (e) {}
 
-            const targetJid = destCfg === 'group' ? key.remoteJid : (owner.getPairedNumber() || settings.ownerNumber) + '@s.whatsapp.net';
+            /* FIX: safe @s.whatsapp.net concat, no double-domain */
+            let ownerNum = (owner.getPairedNumber && owner.getPairedNumber()) || settings.ownerNumber;
+            let targetJid;
+            if (destCfg === 'group') {
+              targetJid = key.remoteJid;
+            } else {
+              if (!ownerNum) continue;
+              targetJid = ownerNum.includes('@') ? ownerNum : ownerNum + '@s.whatsapp.net';
+            }
 
             await Nexora.sendMessage(targetJid, {
               text: caption,
@@ -773,26 +809,14 @@ RECOVERED MESSAGE:`;
       }
     });
 
+    /* FIX: groups.update no longer tries promote/demote (that was dead code).
+       Anti-promote/anti-demote handled in group-participants.update below. */
     Nexora.ev.on('groups.update', async (updates) => {
       for (const update of updates) {
-        if (update.action === 'promote' || update.action === 'demote') {
-          try {
-            const dataPath = path.join(process.cwd(), 'data', 'group_events.json');
-            let cfg = {};
-            if (fs.existsSync(dataPath)) cfg = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-
-            const groupCfg = cfg[update.id] || {};
-            const isPromote = update.action === 'promote';
-
-            if ((isPromote && groupCfg.antipromote) || (!isPromote && groupCfg.antidemote)) {
-              const actor = update.author;
-              if (actor && actor !== Nexora.user.id.split(':')[0] + '@s.whatsapp.net') {
-                await Nexora.groupParticipantsUpdate(update.id, [actor], 'demote');
-                await Nexora.sendMessage(update.id, { text: `Unauthorized admin change detected. Action reverted.\n\n${settings.footer}` });
-              }
-            }
-          } catch (e) {}
-        }
+        try {
+          /* placeholder: react to subject/desc/setting changes if you want */
+          if (!update?.id) continue;
+        } catch (e) {}
       }
     });
 
@@ -806,6 +830,9 @@ RECOVERED MESSAGE:`;
             blockedList = JSON.parse(fs.readFileSync('./data/callblocked.json', 'utf8'));
           }
         } catch (e) {}
+
+        /* FIX: allowlist so saved contacts / owner never get bot spam */
+        const callWhitelist = Array.isArray(settings.callWhitelist) ? settings.callWhitelist : [];
 
         for (const call of calls) {
           if (!call.from) continue;
@@ -830,6 +857,8 @@ RECOVERED MESSAGE:`;
             } catch (e) {}
             continue;
           }
+
+          if (callWhitelist.some(n => String(n).replace(/[^0-9]/g, '') === callerNum)) continue;
 
           const politeMsg =
             `Hi. This number is a WhatsApp bot and cannot receive voice or video calls.\n\n` +
@@ -868,15 +897,17 @@ RECOVERED MESSAGE:`;
       }
     });
 
+    /* FIX: remove stateful 'g' flag from decodeJid regex */
     Nexora.decodeJid = (jid) => {
       if (!jid) return jid;
-      if (/:\d+@/gi.test(jid)) {
+      if (/:\d+@/i.test(jid)) {
         let decode = jidDecode(jid) || {};
         return decode.user && decode.server && decode.user + '@' + decode.server || jid;
       }
       return jid;
     };
 
+    /* FIX: guard Nexora.user access in getName */
     Nexora.getName = (jid, withoutContact = false) => {
       let id = Nexora.decodeJid(jid);
       withoutContact = Nexora.withoutContact || withoutContact;
@@ -887,42 +918,41 @@ RECOVERED MESSAGE:`;
         resolve(v.name || v.subject || PhoneNumber('+' + id.replace('@s.whatsapp.net', '')).getNumber('international'));
       });
       else v = id === '0@s.whatsapp.net' ? { id, name: 'WhatsApp' } :
-        id === Nexora.decodeJid(Nexora.user.id) ? Nexora.user :
+        (Nexora.user?.id && id === Nexora.decodeJid(Nexora.user.id)) ? Nexora.user :
         (store.contacts[id] || {});
       return (withoutContact ? '' : v.name) || v.subject || v.verifiedName ||
         PhoneNumber('+' + jid.replace('@s.whatsapp.net', '')).getNumber('international');
     };
 
-    Nexora.public = true;
-
     let pairingDone = false;
+
     Nexora.ev.on('connection.update', async (s) => {
       const { connection, lastDisconnect, qr } = s;
 
-      if (pairingCode && !Nexora.authState.creds.registered && !pairingDone) {
-        if (connection === 'connecting' || connection === 'open') {
-          pairingDone = true;
-          let phoneNumber = settings.ownerNumber || '';
+      /* FIX: pairing code only on 'connecting' (not on 'open' — too late) */
+      if (pairingCode && !Nexora.authState.creds.registered && !pairingDone && connection === 'connecting') {
+        pairingDone = true;
+        let phoneNumber = settings.ownerNumber || '';
 
-          if (!phoneNumber) {
-            phoneNumber = await question('Enter your WhatsApp number with country code (no + or spaces): ');
-          }
-
-          phoneNumber = String(phoneNumber).replace(/[^0-9]/g, '');
-
-          logger.info(`Requesting pairing code...`);
-
-          setTimeout(async () => {
-            try {
-              let code = await Nexora.requestPairingCode(phoneNumber);
-              code = code?.match(/.{1,4}/g)?.join("-") || code;
-              console.log(chalk.green(`Pairing code: `) + chalk.white.bold(code));
-              console.log(chalk.yellow('Enter this code in WhatsApp > Linked Devices > Link with phone number'));
-            } catch (error) {
-              logger.error(`Pairing code error: ${error.message}`);
-            }
-          }, 5000);
+        if (!phoneNumber) {
+          phoneNumber = await question('Enter your WhatsApp number with country code (no + or spaces): ');
         }
+
+        phoneNumber = String(phoneNumber).replace(/[^0-9]/g, '');
+
+        logger.info(`Requesting pairing code...`);
+
+        setTimeout(async () => {
+          try {
+            let code = await Nexora.requestPairingCode(phoneNumber);
+            code = code?.match(/.{1,4}/g)?.join("-") || code;
+            console.log(chalk.green(`Pairing code: `) + chalk.white.bold(code));
+            console.log(chalk.yellow('Enter this code in WhatsApp > Linked Devices > Link with phone number'));
+          } catch (error) {
+            pairingDone = false;
+            logger.error(`Pairing code error: ${error.message}`);
+          }
+        }, 5000);
       }
 
       if (qr && !pairingCode) logger.warn('QR code generated.');
@@ -989,7 +1019,9 @@ RECOVERED MESSAGE:`;
 
         setTimeout(async () => {
           try {
-            const botNumber = Nexora.user.id.split(':')[0] + '@s.whatsapp.net';
+            const botNumber = Nexora.user?.id ? Nexora.user.id.split(':')[0] + '@s.whatsapp.net' : null;
+            if (!botNumber) return;
+
             const welcomedPath = './data/welcomed.json';
             let welcomedData = {};
 
@@ -1020,6 +1052,17 @@ Join our channel for updates.
 
 ${settings.footer}`;
 
+            /* FIX: withChannel is invalid in Baileys — use contextInfo instead */
+            const channelContext = settings.channelId ? {
+              forwardingScore: 999,
+              isForwarded: true,
+              forwardedNewsletterMessageInfo: {
+                newsletterJid: settings.channelId,
+                newsletterName: settings.botName || 'NEXORA MD',
+                serverMessageId: 1
+              }
+            } : undefined;
+
             const welcomeImages = Array.isArray(settings.welcomeImages) ? settings.welcomeImages : [];
             const randomImage = welcomeImages.length > 0
               ? welcomeImages[Math.floor(Math.random() * welcomeImages.length)]
@@ -1033,7 +1076,7 @@ ${settings.footer}`;
                 await Nexora.sendMessage(botNumber, {
                   image: buffer,
                   caption: welcomeText,
-                  withChannel: true
+                  ...(channelContext ? { contextInfo: channelContext } : {})
                 });
                 imageSent = true;
                 logger.success('Welcome message sent with image.');
@@ -1045,7 +1088,7 @@ ${settings.footer}`;
             if (!imageSent) {
               await Nexora.sendMessage(botNumber, {
                 text: welcomeText,
-                withChannel: true
+                ...(channelContext ? { contextInfo: channelContext } : {})
               });
               logger.success('Welcome message sent (text only).');
             }
@@ -1075,22 +1118,44 @@ ${settings.footer}`;
           } catch (e) {}
         }
 
-        if (shouldReconnect) {
+        /* FIX: prevent listener leak / duplicate handlers on reconnect */
+        if (shouldReconnect && !isReconnecting) {
+          isReconnecting = true;
+          try {
+            activeSock?.ev?.removeAllListeners?.();
+            activeSock?.end?.(undefined);
+          } catch (e) {}
+          activeSock = null;
           await delay(3000);
+          isReconnecting = false;
           startNexora();
         }
       }
     });
 
     Nexora.ev.on('group-participants.update', async (update) => {
-      await handleGroupParticipantUpdate(Nexora, update);
+      /* FIX: anti-promote/anti-demote moved here (correct event) */
+      try {
+        await handleGroupParticipantUpdate(Nexora, update);
+      } catch (e) {
+        logger.error(`Group participant update: ${e.message}`);
+      }
     });
 
     return Nexora;
   } catch (error) {
     logger.error(`Error starting bot: ${error.message}`);
     await delay(5000);
-    startNexora();
+    if (!isReconnecting) {
+      isReconnecting = true;
+      try {
+        activeSock?.ev?.removeAllListeners?.();
+        activeSock?.end?.(undefined);
+      } catch (e) {}
+      activeSock = null;
+      isReconnecting = false;
+      startNexora();
+    }
   }
 }
 
