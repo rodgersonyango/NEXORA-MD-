@@ -4,14 +4,14 @@ const path = require('path');
 const settings = require('../../settings');
 const logger = require('../../lib/logger');
 
-// WhatsApp safe limit for panel/Heroku RAM
+// 60MB Limit to protect server RAM
 const MAX_WA_LIMIT = 60 * 1024 * 1024; 
 
 module.exports = {
     name: 'directdl',
-    aliases: ['dl', 'download'],
+    aliases: ['dl', 'download', 'ydl'],
     category: 'download',
-    description: 'Download direct files (movies, zips) or social media videos',
+    description: 'Download direct files, movies, social media, or webpages',
     usage: '.directdl <url>',
     react: '📥',
 
@@ -41,7 +41,6 @@ module.exports = {
                 await conn.sendMessage(chatId, { text: `📱 Social media link detected. Extracting media...` }, { quoted: mek });
                 
                 try {
-                    // Using a public API to grab the raw video URL
                     const apiUrl = `https://api.nexoracle.com/downloader/ytdl?url=${encodeURIComponent(url)}&apikey=free_key`;
                     const apiRes = await axios.get(apiUrl, { timeout: 20000 });
                     
@@ -57,12 +56,11 @@ module.exports = {
                     }
                 } catch (e) {
                     logger.warn(`[SOCIAL API] Extraction failed: ${e.message}`);
-                    // Will fall through and fail gracefully below
                 }
             }
 
             // ═══════════════════════════════════════════════════════
-            // 2. DIRECT FILE DETECTION (Movies, APKs, PDFs, ZIPs)
+            // 2. DIRECT FILE DETECTION (Movies, APKs, PDFs, WEBPAGES)
             // ═══════════════════════════════════════════════════════
             if (!finalDownloadUrl) {
                 const headRes = await axios.head(url, { 
@@ -74,37 +72,39 @@ module.exports = {
                     const contentType = headRes.headers['content-type'] || '';
                     const contentLength = parseInt(headRes.headers['content-length'] || '0', 10);
                     
-                    // Reject HTML pages
-                    if (contentType.includes('text/html')) {
-                        return conn.sendMessage(chatId, { 
-                            text: `❌ This link is a webpage, not a downloadable file.\n\nIf it's a video, the site might be blocking the bot.\n\n${settings.footer}` 
-                        }, { quoted: mek });
-                    }
-
                     // Handle Large Movies (Over 60MB)
                     if (contentLength > MAX_WA_LIMIT) {
                         const sizeMB = (contentLength / 1024 / 1024).toFixed(2);
                         return conn.sendMessage(chatId, { 
-                            text: `🍿 *Large File Detected (${sizeMB} MB)*\n\nWhatsApp's limit is 60MB, so I cannot send this directly in chat. \n\nClick the link below to download it in your browser:\n🔗 ${url}\n\n${settings.footer}` 
+                            text: `🍿 *Large File Detected (${sizeMB} MB)*\n\nWhatsApp's limit is 60MB, so I cannot send this directly. \n\nClick the link below to download it in your browser:\n🔗 ${url}\n\n${settings.footer}` 
                         }, { quoted: mek });
                     }
                     
-                    // It's a valid, downloadable file under 60MB
                     finalDownloadUrl = url;
                     
-                    // Grab file extension from URL (e.g. .mp4, .pdf)
+                    // Grab file extension from URL
                     const urlParts = url.split('?')[0].split('/');
                     const lastPart = urlParts[urlParts.length - 1];
                     if (lastPart && lastPart.includes('.')) {
                         fileName = lastPart;
+                    } else {
+                        // 🔥 THE FIX: If it's a webpage or PHP file, save it as .html
+                        if (contentType.includes('text/html') || url.includes('.php')) {
+                            fileName += '.html';
+                        } else {
+                            fileName += '.bin'; // Unknown file type
+                        }
                     }
+                } else {
+                    // If HEAD fails, try to download it anyway as a webpage
+                    finalDownloadUrl = url;
+                    fileName += '.html';
                 }
             }
 
-            // If nothing was found
             if (!finalDownloadUrl) {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ Unsupported or invalid link.\n\nMake sure it is a direct download link or a public social media video.\n\n${settings.footer}` 
+                    text: `❌ Unsupported or invalid link.\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
@@ -122,8 +122,8 @@ module.exports = {
                 url: finalDownloadUrl,
                 method: 'GET',
                 responseType: 'stream',
-                headers: { 'User-Agent': 'Mozilla/5.0' },
-                timeout: 60000 // 60 seconds max download time
+                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+                timeout: 60000 
             });
 
             response.data.pipe(writer);
@@ -137,9 +137,14 @@ module.exports = {
             if (stats.size === 0) throw new Error("Downloaded file is empty.");
 
             const buffer = fs.readFileSync(filePath);
+            
+            // Detect mimetype based on the file name we forced
+            let finalMime = 'application/octet-stream';
+            if (fileName.endsWith('.html')) finalMime = 'text/html';
+            else if (fileName.endsWith('.mp4')) finalMime = 'video/mp4';
+            else if (fileName.endsWith('.pdf')) finalMime = 'application/pdf';
 
-            // Send video natively if it's social media, else send as document
-            if (isSocial && (fileName.endsWith('.mp4') || fileName.endsWith('.mkv'))) {
+            if (isSocial && fileName.endsWith('.mp4')) {
                 await conn.sendMessage(chatId, {
                     video: buffer,
                     caption: `✅ Downloaded successfully!\n📁 ${fileName}\n📦 ${(stats.size/1024/1024).toFixed(1)} MB\n\n${settings.footer}`
@@ -148,14 +153,13 @@ module.exports = {
                 await conn.sendMessage(chatId, {
                     document: buffer,
                     fileName: fileName,
-                    mimetype: 'application/octet-stream',
+                    mimetype: finalMime,
                     caption: `✅ Downloaded successfully!\n📁 ${fileName}\n📦 ${(stats.size/1024/1024).toFixed(1)} MB\n\n${settings.footer}`
                 }, { quoted: mek });
             }
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
-            // Cleanup temp file to save server disk space
             setTimeout(() => {
                 try { if (fs.existsSync(filePath)) fs.unlinkSync(filePath); } catch (e) {}
             }, 5000);
@@ -164,7 +168,7 @@ module.exports = {
             logger.error(`[DIRECTDL] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ Download failed.\nReason: ${error.message}\n\nMake sure the link is public and valid.\n\n${settings.footer}` 
+                text: `❌ Download failed.\nReason: ${error.message}\n\n${settings.footer}` 
             }, { quoted: mek });
         }
     }
