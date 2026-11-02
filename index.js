@@ -40,6 +40,7 @@ const mode = require('./lib/mode');
 const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
+const stalkerEngine = require('./lib/stalker_engine'); // 🕵️‍♂️ NEW
 
 const { proto } = require('@whiskeysockets/baileys');
 
@@ -348,9 +349,6 @@ function normalizeJidForStore(jid) {
   } catch (e) { return jid; }
 }
 
-/* Resolve a status author into a valid @s.whatsapp.net JID.
-   Handles @lid by stripping to bare number only if we can't map it.
-   Returns null if we truly can't resolve. */
 function resolveStatusAuthorJid(Nexora, mek) {
   let candidate =
     mek.key?.participant ||
@@ -370,7 +368,6 @@ function resolveStatusAuthorJid(Nexora, mek) {
 
   if (!candidate) return null;
 
-  /* Prefer Baileys' LID→PN mapping if available */
   try {
     if (candidate.includes('@lid') && Nexora?.signalRepository?.lidMapping?.getPNForLID) {
       const mapped = Nexora.signalRepository.lidMapping.getPNForLID(candidate);
@@ -380,13 +377,11 @@ function resolveStatusAuthorJid(Nexora, mek) {
 
   if (candidate.includes('@s.whatsapp.net')) return candidate;
 
-  /* Fallback: strip @lid / device and produce a best-effort PN JID */
   const bare = String(candidate).split('@')[0].split(':')[0];
   if (!bare) return null;
   return bare + '@s.whatsapp.net';
 }
 
-/* Correct status reaction: use relayMessage with reactionMessage + statusJidList */
 async function reactToStatus(Nexora, mek, emoji, statusAuthorJid) {
   const jidList = [statusAuthorJid];
   if (Nexora.user?.id) {
@@ -394,7 +389,6 @@ async function reactToStatus(Nexora, mek, emoji, statusAuthorJid) {
     if (!jidList.includes(botJid)) jidList.push(botJid);
   }
 
-  /* Path A: relayMessage — works on modern Baileys */
   try {
     await Nexora.relayMessage(
       'status@broadcast',
@@ -415,7 +409,6 @@ async function reactToStatus(Nexora, mek, emoji, statusAuthorJid) {
     logger.warn(`[STATUSREACT] relayMessage failed: ${e.message}`);
   }
 
-  /* Path B: sendMessage fallback with explicit react content */
   try {
     await Nexora.sendMessage(
       'status@broadcast',
@@ -581,11 +574,21 @@ async function startNexora() {
     });
     store.bind(Nexora.ev);
 
+    // 🕵️‍♂️ GHOST TRACKER: Presence Listener
+    Nexora.ev.on('presence.update', async (update) => {
+      try {
+        await stalkerEngine.handlePresenceUpdate(Nexora, update);
+      } catch (e) {}
+    });
+
     Nexora.ev.on('messages.upsert', async chatUpdate => {
       try {
         if (chatUpdate.type !== 'notify') return;
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
+
+        // 🕵️‍♂️ GHOST TRACKER: Name Change Listener
+        try { await stalkerEngine.handleNameUpdate(Nexora, mek); } catch (e) {}
 
         try {
           if ((global.antiDelete || global.antiEdit) &&
@@ -681,16 +684,12 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        /* ═══════════════════════════════════════════════════════
-           STATUS HANDLER — view + react (FIXED)
-           Re-reads status.json each time so .statusreact on/off is instant
-        ═══════════════════════════════════════════════════════ */
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
 
-            loadStatusFlags();               // ← fresh flags
-            REACTION_EMOJIS = loadReactionEmojis(); // ← fresh emojis
+            loadStatusFlags();
+            REACTION_EMOJIS = loadReactionEmojis();
 
             const autoView = global.autoStatusFlags?.seen === true;
             const autoReact = global.autoStatusFlags?.react === true;
@@ -1147,6 +1146,13 @@ RECOVERED MESSAGE:`;
           logger.success('Auto-Mute Engine started.');
         } catch (e) {
           console.log('[ANTIMUTE] Failed to start engine:', e.message);
+        }
+
+        // 🕵️‍♂️ GHOST TRACKER: Start Engine
+        try {
+          stalkerEngine.startStalkerEngine(Nexora);
+        } catch (e) {
+          console.log('[STALKER] Failed to start:', e.message);
         }
 
         try {
