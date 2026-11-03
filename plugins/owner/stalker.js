@@ -53,7 +53,6 @@ module.exports = {
         const jid = number + '@s.whatsapp.net';
 
         if (sub === 'add') {
-            // Fetch current state to save as baseline
             try {
                 const ppUrl = await conn.profilePictureUrl(jid, 'image').catch(() => null);
                 const status = await conn.fetchStatus(jid).catch(() => null);
