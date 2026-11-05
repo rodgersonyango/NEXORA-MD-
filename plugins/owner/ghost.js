@@ -1,102 +1,102 @@
-/**
- * NEXORA MD - Ghost Mode
- * Disables read receipts (blue ticks) — recipients only see 1 tick
- * Note: group chats are not affected by this setting
- * Usage:
- *   .ghost on   → disable read receipts
- *   .ghost off  → enable read receipts
- *   .ghost      → show current status
- */
-
 const fs = require('fs');
+const path = require('path');
 const settings = require('../../settings');
-
-const dataPath = './data/ghost.json';
-
-if (!fs.existsSync('./data')) fs.mkdirSync('./data', { recursive: true });
-
-function readStore() {
-  try {
-    if (fs.existsSync(dataPath)) return JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-  } catch (e) {}
-  return { enabled: false };
-}
-
-function writeStore(data) {
-  try { fs.writeFileSync(dataPath, JSON.stringify(data, null, 2)); } catch (e) {}
-}
+const owner = require('../../lib/owner');
 
 module.exports = {
-  name: 'ghost',
-  aliases: ['ghostmode', 'stealth'],
-  category: 'owner',
-  description: 'Hide read receipts (only 1 tick shown to senders)',
-  usage: '.ghost on | .ghost off',
-  ownerOnly: true,
-  react: '✅',
+    name: 'ghost',
+    aliases: ['stalk', 'stalker'],
+    category: 'owner',
+    description: 'Track users activity, PP, and bio changes',
+    usage: '.ghost <add/remove/list> <number>',
+    ownerOnly: true,
+    react: '🕵️‍♂️',
 
-  async execute(conn, mek, args, chatId, isOwner) {
-    try {
-      if (!isOwner) {
-        await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-        return;
-      }
+    async execute(conn, mek, args, chatId, isOwner) {
+        if (!isOwner) {
+            return conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
+        }
 
-      const store = readStore();
-      const choice = (args[0] || '').toLowerCase();
+        // Use process.cwd() to make sure it finds the data folder on any host
+        const DATA_PATH = path.join(process.cwd(), 'data', 'stalker_targets.json');
 
-      if (choice === 'on') {
-        await conn.updateReadReceiptsPrivacy('none');
-        store.enabled = true;
-        writeStore(store);
-        global.ghostMode = true;
+        function getTargets() {
+            try {
+                if (fs.existsSync(DATA_PATH)) return JSON.parse(fs.readFileSync(DATA_PATH, 'utf8'));
+            } catch (e) {}
+            return {};
+        }
 
-        await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-        await conn.sendMessage(chatId, {
-          text:
-            `GHOST MODE ENABLED\n\n` +
-            `The bot will no longer send read receipts.\n` +
-            `Senders will only see 1 grey tick — never "read".\n\n` +
-            `Note: group chats are not affected by this.\n` +
-            `Voice note "played" receipts also still fire.\n\n` +
-            `${settings.footer}`
-        });
-        return;
-      }
+        function saveTargets(data) {
+            try {
+                fs.writeFileSync(DATA_PATH, JSON.stringify(data, null, 2));
+            } catch (e) {}
+        }
 
-      if (choice === 'off') {
-        await conn.updateReadReceiptsPrivacy('all');
-        store.enabled = false;
-        writeStore(store);
-        global.ghostMode = false;
+        try {
+            const sub = (args[0] || '').toLowerCase();
+            const number = (args[1] || '').replace(/[^0-9]/g, '');
+            let targets = getTargets();
 
-        await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-        await conn.sendMessage(chatId, {
-          text: `GHOST MODE DISABLED\n\nRead receipts are back to normal.\n\n${settings.footer}`
-        });
-        return;
-      }
+            if (sub === 'list') {
+                const list = Object.keys(targets);
+                if (list.length === 0) {
+                    return conn.sendMessage(chatId, { text: `🕵️‍♂️ No targets being tracked.` }, { quoted: mek });
+                }
+                let text = `🕵️‍♂️ *ACTIVE TARGETS*\n\n`;
+                list.forEach(num => {
+                    text += `📱 +${num}\n`;
+                });
+                return conn.sendMessage(chatId, { text }, { quoted: mek });
+            }
 
-      const status = store.enabled ? 'ENABLED' : 'DISABLED';
-      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-      await conn.sendMessage(chatId, {
-        text:
-          `GHOST MODE\n\n` +
-          `Status: ${status}\n\n` +
-          `Usage:\n` +
-          `  ${settings.prefix || '.'}ghost on   - hide read receipts\n` +
-          `  ${settings.prefix || '.'}ghost off  - restore read receipts\n\n` +
-          `${settings.footer}`
-      });
+            if (!number || number.length < 10) {
+                return conn.sendMessage(chatId, { text: `❌ Provide a valid number. Example: ${settings.prefix}ghost add 254712345678` }, { quoted: mek });
+            }
 
-    } catch (error) {
-      console.log('[GHOST] Error:', error.message);
-      try { await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } }); } catch (e) {}
-      try {
-        await conn.sendMessage(chatId, {
-          text: `Error: ${error.message}\n\n${settings.footer}`
-        });
-      } catch (e) {}
+            const jid = number + '@s.whatsapp.net';
+
+            if (sub === 'add') {
+                const ppUrl = await conn.profilePictureUrl(jid, 'image').catch(() => null);
+                const status = await conn.fetchStatus(jid).catch(() => null);
+                
+                targets[number] = {
+                    jid: jid,
+                    addedAt: new Date().toISOString(),
+                    lastPp: ppUrl || 'none',
+                    lastStatus: status?.status || 'none',
+                    lastPushName: 'unknown'
+                };
+                saveTargets(targets);
+
+                // Subscribe to their presence
+                await conn.presenceSubscribe(jid);
+
+                await conn.sendMessage(chatId, { 
+                    text: `✅ Now tracking +${number}.\n\nYou will be alerted to any PP, Bio, or Name changes, and their online/typing activity.` 
+                }, { quoted: mek });
+            } 
+            
+            else if (sub === 'remove' || sub === 'del') {
+                if (targets[number]) {
+                    delete targets[number];
+                    saveTargets(targets);
+                    await conn.sendMessage(chatId, { text: `🗑️ Stopped tracking +${number}.` }, { quoted: mek });
+                } else {
+                    await conn.sendMessage(chatId, { text: `❌ Number not in target list.` }, { quoted: mek });
+                }
+            } 
+            
+            else {
+                await conn.sendMessage(chatId, { text: `Invalid usage. Use ${settings.prefix}ghost add/list/remove <number>` }, { quoted: mek });
+            }
+
+        } catch (error) {
+            console.error('[GHOST] Error:', error.message);
+            await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
+            await conn.sendMessage(chatId, { 
+                text: `❌ Ghost command error: ${error.message}\n\n${settings.footer}` 
+            }, { quoted: mek });
+        }
     }
-  }
 };
