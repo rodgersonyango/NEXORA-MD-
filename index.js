@@ -40,7 +40,7 @@ const mode = require('./lib/mode');
 const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
-const stalkerEngine = require('./lib/stalker_engine'); // 🕵️‍♂️ NEW
+const stalkerEngine = require('./lib/stalker_engine'); // 🕵️‍♂️ GHOST TRACKER
 
 const { proto } = require('@whiskeysockets/baileys');
 
@@ -503,12 +503,16 @@ async function startNexora() {
       return result;
     };
 
+    /* 🔥 THE FIX: Advanced Ghost-Clock Prevention */
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        if (content?.text && options.quoted) {
-          const qJid = options.quoted?.key?.remoteJid;
-          if (!qJid || qJid !== jid || !options.quoted?.message) {
+        // Prevent "Waiting for this message" ghost clocks
+        if (options.quoted) {
+          const qMsg = options.quoted;
+          if (!qMsg || !qMsg.message || !qMsg.key || !qMsg.key.id) {
             delete options.quoted;
+          } else if (jid.endsWith('@g.us') && !qMsg.key.participant) {
+            options.quoted.key.participant = qMsg.participant || qMsg.key.remoteJid;
           }
         }
 
