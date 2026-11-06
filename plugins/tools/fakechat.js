@@ -1,4 +1,4 @@
-const { createCanvas, loadImage } = require('canvas');
+const sharp = require('sharp');
 const settings = require('../../settings');
 const logger = require('../../lib/logger');
 
@@ -41,112 +41,88 @@ module.exports = {
                 isUser1 = !isUser1;
             }
 
-            // 1. Setup Canvas (1080x1920 for high quality)
-            const width = 1080;
-            const height = Math.max(1920, messages.length * 180 + 400); 
-            const canvas = createCanvas(width, height);
-            const ctx = canvas.getContext('2d');
+            const width = 800;
+            let currentY = 160;
+            let svgBubbles = '';
 
-            // 2. Background (WhatsApp Dark Mode)
-            ctx.fillStyle = '#0b141a';
-            ctx.fillRect(0, 0, width, height);
-
-            // 3. Header
-            ctx.fillStyle = '#202c33';
-            ctx.fillRect(0, 0, width, 150);
-            
-            // Back arrow & Profile icon (Simulated)
-            ctx.fillStyle = '#aebac1';
-            ctx.font = '40px Arial';
-            ctx.fillText('←', 30, 90);
-            ctx.beginPath();
-            ctx.arc(120, 75, 40, 0, Math.PI * 2);
-            ctx.fillStyle = '#667781';
-            ctx.fill();
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '30px Arial';
-            ctx.fillText(messages[0]?.name || 'Chat', 180, 85);
-
-            // 4. Draw Messages
-            let currentY = 200;
-            const bubblePadding = 30;
-            const maxBubbleWidth = width * 0.75;
-
+            // Loop through messages and build SVG bubbles
             for (let i = 0; i < messages.length; i++) {
                 const msg = messages[i];
                 const isMe = msg.isUser;
-
-                ctx.font = '36px Arial';
-                // Word wrap logic
+                
+                // Simple word wrap
+                const maxChars = 35;
                 const words = msg.text.split(' ');
                 let lines = [];
                 let currentLine = '';
-                
                 for (let word of words) {
-                    const testLine = currentLine + word + ' ';
-                    const metrics = ctx.measureText(testLine);
-                    if (metrics.width > maxBubbleWidth - (bubblePadding * 2)) {
-                        lines.push(currentLine);
-                        currentLine = word + ' ';
-                    } else {
-                        currentLine = testLine;
+                    if ((currentLine + word).length > maxChars) {
+                        lines.push(currentLine.trim());
+                        currentLine = '';
                     }
+                    currentLine += word + ' ';
                 }
-                lines.push(currentLine);
+                if (currentLine.trim()) lines.push(currentLine.trim());
 
-                // Calculate bubble size
-                const lineHeight = 45;
-                const textHeight = lines.length * lineHeight;
-                const bubbleHeight = textHeight + (bubblePadding * 2);
+                const bubbleHeight = (lines.length * 35) + 50;
+                const bubbleWidth = isMe ? 450 : 480; 
+                const bubbleX = isMe ? width - bubbleWidth - 20 : 20;
+
+                // Bubble color (WhatsApp Dark Mode)
+                const bgColor = isMe ? '#005c4b' : '#202c33';
                 
-                let maxLineWidth = 0;
-                for (let line of lines) {
-                    maxLineWidth = Math.max(maxLineWidth, ctx.measureText(line).width);
-                }
-                const bubbleWidth = Math.min(maxBubbleWidth, maxLineWidth + (bubblePadding * 2));
+                // Draw bubble background
+                svgBubbles += `<rect x="${bubbleX}" y="${currentY}" width="${bubbleWidth}" height="${bubbleHeight}" rx="15" fill="${bgColor}" />`;
 
-                // Bubble X position
-                const bubbleX = isMe ? width - bubbleWidth - 40 : 40;
+                // Draw text
+                lines.forEach((line, index) => {
+                    // Escape XML characters to prevent SVG crashing
+                    const safeLine = line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    svgBubbles += `<text x="${bubbleX + 15}" y="${currentY + 35 + (index * 35)}" fill="#e9edef" font-family="Arial, sans-serif" font-size="26">${safeLine}</text>`;
+                });
 
-                // Draw Bubble Background
-                ctx.fillStyle = isMe ? '#005c4b' : '#202c33';
-                ctx.beginPath();
-                ctx.roundRect(bubbleX, currentY, bubbleWidth, bubbleHeight, 20);
-                ctx.fill();
-
-                // Draw Text
-                ctx.fillStyle = '#e9edef';
-                for (let j = 0; j < lines.length; j++) {
-                    ctx.fillText(lines[j], bubbleX + bubblePadding, currentY + bubblePadding + 35 + (j * lineHeight));
-                }
-
-                // Draw Timestamp & Ticks
-                ctx.fillStyle = '#8696a0';
-                ctx.font = '22px Arial';
+                // Draw Time & Ticks
                 const time = new Date(Date.now() - (messages.length - i) * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
-                ctx.fillText(time, bubbleX + bubbleWidth - 110, currentY + bubbleHeight - 15);
+                svgBubbles += `<text x="${bubbleX + bubbleWidth - 90}" y="${currentY + bubbleHeight - 15}" fill="#8696a0" font-family="Arial, sans-serif" font-size="18">${time}</text>`;
                 
                 if (isMe) {
-                    // Draw Blue Ticks (✓✓)
-                    ctx.fillStyle = '#53bdeb';
-                    ctx.font = '22px Arial';
-                    ctx.fillText('✓✓', bubbleX + bubbleWidth - 40, currentY + bubbleHeight - 15);
+                    // Blue checkmarks
+                    svgBubbles += `<text x="${bubbleX + bubbleWidth - 35}" y="${currentY + bubbleHeight - 15}" fill="#53bdeb" font-family="Arial, sans-serif" font-size="18">✓✓</text>`;
                 }
 
-                currentY += bubbleHeight + 30;
+                currentY += bubbleHeight + 20;
             }
 
-            // 5. Crop out the empty bottom space
-            const finalHeight = Math.min(height, currentY + 50);
-            const finalCanvas = createCanvas(width, finalHeight);
-            const finalCtx = finalCanvas.getContext('2d');
-            finalCtx.drawImage(canvas, 0, 0, width, finalHeight, 0, 0, width, finalHeight);
+            const finalHeight = currentY + 30;
 
-            const buffer = finalCanvas.toBuffer('image/jpeg', { quality: 0.95 });
+            // Create the full SVG Canvas
+            const svgImage = `
+                <svg width="${width}" height="${finalHeight}">
+                    <!-- Background -->
+                    <rect width="${width}" height="${finalHeight}" fill="#0b141a" />
+                    
+                    <!-- Header -->
+                    <rect width="${width}" height="100" fill="#202c33" />
+                    <text x="20" y="60" fill="#aebac1" font-family="Arial, sans-serif" font-size="30">←</text>
+                    
+                    <!-- Profile Pic Circle -->
+                    <circle cx="80" cy="50" r="25" fill="#667781" />
+                    
+                    <!-- Contact Name -->
+                    <text x="120" y="60" fill="#e9edef" font-family="Arial, sans-serif" font-size="24" font-weight="bold">${messages[0]?.name || 'Chat'}</text>
 
+                    <!-- Bubbles -->
+                    ${svgBubbles}
+                </svg>
+            `;
+
+            // Convert SVG to PNG using Sharp
+            const buffer = await sharp(Buffer.from(svgImage)).png().toBuffer();
+
+            // Send Image
             await conn.sendMessage(chatId, {
                 image: buffer,
-                caption: `✅ *Fake Chat Generated Locally!*\n\n_Save this image and prank your friends._\n\n${settings.footer}`
+                caption: `✅ *Fake Chat Generated!*\n\n_Save this image and prank your friends._\n\n${settings.footer}`
             }, { quoted: mek });
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
