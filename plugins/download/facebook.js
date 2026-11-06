@@ -22,39 +22,42 @@ module.exports = {
       }
 
       await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-      await conn.sendMessage(chatId, { text: `🔵 *Downloading Facebook video...*\n\nPlease wait...\n\n${settings.footer}` }, { quoted: mek });
+      await conn.sendMessage(chatId, { text: `🔵 *Bypassing Facebook Servers...*\n\nPlease wait...\n\n${settings.footer}` }, { quoted: mek });
 
-      let videoUrl = null;
-      let title = 'Facebook Video';
+      // 🔥 THE HACK: Scraping fdown.net just like your website does
+      const response = await axios.get(`https://fdown.net/download.php?URL=${encodeURIComponent(url)}`, {
+          headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+          },
+          timeout: 30000
+      });
+      
+      const html = response.data;
 
-      // Try API 1 (Fresh endpoint)
-      try {
-        const res = await axios.get(`https://api.ryzendesu.vip/api/downloader/fbdl?url=${encodeURIComponent(url)}`, { timeout: 30000 });
-        videoUrl = res.data?.data?.hd || res.data?.data?.sd || res.data?.data;
-        if (res.data?.title) title = res.data.title;
-      } catch (e) {
-        logger.warn(`[FACEBOOK] API 1 Failed: ${e.message}`);
-      }
+      // Extract HD and SD links using Regex
+      // Note: fdown.net sometimes changes their HTML slightly, so we check both patterns
+      const hdMatch = html.match(/href="([^"]+)"[^>]*>Download in HD/);
+      const sdMatch = html.match(/href="([^"]+)"[^>]*>Download in SD/);
+      
+      // Fallback pattern if the first one fails
+      const fallbackHd = html.match(/href="([^"]+)"[^>]*>Download High Quality/);
+      const fallbackSd = html.match(/href="([^"]+)"[^>]*>Download Normal Quality/);
 
-      // Try API 2 (Fallback)
-      if (!videoUrl) {
-        try {
-          const res2 = await axios.get(`https://api.vreden.my.id/api/fbdownload?url=${encodeURIComponent(url)}`, { timeout: 30000 });
-          videoUrl = res2.data?.result?.hd || res2.data?.result?.sd;
-          if (res2.data?.result?.title) title = res2.data.result.title;
-        } catch (e) {
-          logger.warn(`[FACEBOOK] API 2 Failed: ${e.message}`);
-        }
-      }
+      const videoHd = hdMatch ? hdMatch[1] : (fallbackHd ? fallbackHd[1] : null);
+      const videoSd = sdMatch ? sdMatch[1] : (fallbackSd ? fallbackSd[1] : null);
 
-      if (!videoUrl) {
-        throw new Error('All download APIs failed. The link may be private or the APIs are down.');
+      // Choose HD first, then SD
+      const finalVideoUrl = videoHd || videoSd;
+
+      if (!finalVideoUrl) {
+        throw new Error('Could not extract video URL. The video might be private.');
       }
 
       // Send the Video
       await conn.sendMessage(chatId, {
-        video: { url: videoUrl },
-        caption: `✅ *Facebook Video Downloaded*\n\n📝 Title: ${title}\n\n${settings.footer}`
+        video: { url: finalVideoUrl },
+        caption: `✅ *Facebook Video Downloaded*\n\n_If HD failed to send, it might be too large for WhatsApp._\n\n${settings.footer}`
       }, { quoted: mek });
 
       await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
@@ -64,7 +67,7 @@ module.exports = {
       try { await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } }); } catch (err) {}
       
       await conn.sendMessage(chatId, {
-        text: `❌ Failed to download Facebook video.\nReason: ${e.message}\n\n*Note: Public APIs are unreliable. If this keeps failing, we need to use a paid/free-tier API.*\n\n${settings.footer}`
+        text: `❌ Failed to download Facebook video.\nReason: ${e.message}\n\n*Note: If the video is private or Facebook blocked the bot IP, it will fail.*\n\n${settings.footer}`
       }, { quoted: mek });
     }
   }
