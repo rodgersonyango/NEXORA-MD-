@@ -13,12 +13,11 @@ module.exports = {
     name: 'tovn',
     aliases: ['tovoice', 'extractaudio', 'tomp3'],
     category: 'tools',
-    description: 'Convert a video or audio to a Voice Note',
-    usage: '.tovn (Reply to a video/audio)',
-    react: '🎙️',
+    description: 'Convert a video to an Audio file',
+    usage: '.tovn (Reply to a video)',
+    react: '🎵',
 
     async execute(conn, mek, args, chatId) {
-        // Check if the user is replying to a video or audio
         const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
         
         if (!quoted || (!quoted.videoMessage && !quoted.audioMessage)) {
@@ -31,7 +30,7 @@ module.exports = {
         const mediaMsg = isVideo ? quoted.videoMessage : quoted.audioMessage;
 
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `🎙️ *Extracting audio...*` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `🎵 *Extracting audio...*` }, { quoted: mek });
 
         const tmpDir = path.join(process.cwd(), 'data', 'tmp');
         if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
@@ -54,9 +53,9 @@ module.exports = {
             // 2. Extract audio using FFmpeg
             await new Promise((resolve, reject) => {
                 ffmpeg(inputPath)
-                    .noVideo() // Remove video track
-                    .audioCodec('libmp3lame') // Use MP3 codec
-                    .audioBitrate('128k') // Good quality
+                    .noVideo()
+                    .audioCodec('libmp3lame')
+                    .audioBitrate('128k')
                     .format('mp3')
                     .save(outputPath)
                     .on('end', resolve)
@@ -65,13 +64,26 @@ module.exports = {
 
             // 3. Read the output file
             const audioBuffer = fs.readFileSync(outputPath);
+            const stats = fs.statSync(outputPath);
+            const sizeInMB = stats.size / (1024 * 1024);
 
-            // 4. Send as a Voice Note (PTT)
-            await conn.sendMessage(chatId, {
-                audio: audioBuffer,
-                mimetype: 'audio/mp4',
-                ptt: true // This makes it a Voice Note
-            }, { quoted: mek });
+            // 4. Send the audio
+            if (sizeInMB > 15) {
+                // If it's a massive file (over 15MB), send as a Document so WhatsApp doesn't compress it
+                await conn.sendMessage(chatId, {
+                    document: audioBuffer,
+                    fileName: `NEXORA_Audio_${Date.now()}.mp3`,
+                    mimetype: 'audio/mpeg',
+                    caption: `✅ *Audio Extracted!*\n\n_File was too large for normal audio, so it was sent as an MP3 document._\n\n${settings.footer}`
+                }, { quoted: mek });
+            } else {
+                // 🔥 FIX: ptt: false sends it as a normal audio track (Music icon)
+                await conn.sendMessage(chatId, {
+                    audio: audioBuffer,
+                    mimetype: 'audio/mpeg',
+                    ptt: false 
+                }, { quoted: mek });
+            }
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
@@ -83,10 +95,9 @@ module.exports = {
             logger.error(`[TOVN] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ Failed to convert: ${error.message}\n\n${settings.footer}` 
+                text: `❌ Failed to extract audio: ${error.message}\n\n${settings.footer}` 
             }, { quoted: mek });
 
-            // Cleanup on error
             if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
             if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
         }
