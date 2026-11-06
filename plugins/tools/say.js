@@ -7,19 +7,35 @@ module.exports = {
     aliases: ['tts', 'voice'],
     category: 'tools',
     description: 'Generate an AI Voice Note',
-    usage: '.say <text>',
+    usage: '.say <language_code> <text>',
     react: '🎙️',
 
     async execute(conn, mek, args, chatId) {
         if (args.length === 0) {
             return conn.sendMessage(chatId, { 
-                text: `❌ Please provide text.\nExample: ${settings.prefix}say Hello world\n\n${settings.footer}` 
+                text: `❌ Please provide text.\n\n*Example:*\n${settings.prefix}say en Hello world\n${settings.prefix}say sw Habari yako\n\n*Languages:* en (English), sw (Swahili), fr (French), es (Spanish)\n\n${settings.footer}` 
             }, { quoted: mek });
         }
 
+        let lang = 'en'; // Default English
         let text = args.join(' ');
 
-        // Google TTS has a 200 character limit per request. We split it to be safe.
+        // List of supported Google TTS language codes
+        const validLangs = ['en', 'sw', 'fr', 'es', 'de', 'it', 'pt', 'ru', 'ja', 'ko', 'zh'];
+        const firstWord = args[0].toLowerCase();
+        
+        if (validLangs.includes(firstWord)) {
+            lang = firstWord;
+            text = args.slice(1).join(' '); // Remove language code from text
+        }
+
+        if (!text) {
+            return conn.sendMessage(chatId, { 
+                text: `❌ Please provide text to speak.\n\n${settings.footer}` 
+            }, { quoted: mek });
+        }
+
+        // Google TTS limit is 200 chars
         if (text.length > 200) {
             text = text.substring(0, 200);
         }
@@ -27,8 +43,7 @@ module.exports = {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
         try {
-            // Reliable Google TTS endpoint (No API Key)
-            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=en&client=tw-ob`;
+            const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
 
             const response = await axios.get(url, {
                 responseType: 'arraybuffer',
@@ -41,12 +56,10 @@ module.exports = {
 
             const buffer = Buffer.from(response.data);
 
-            // Check if Google returned an error page instead of audio
             if (buffer.length < 2000) {
-                throw new Error("Audio file is too small. Google blocked the request.");
+                throw new Error("Audio generation failed.");
             }
 
-            // Send as a WhatsApp Voice Note
             await conn.sendMessage(chatId, {
                 audio: buffer,
                 mimetype: 'audio/mp4',
@@ -59,7 +72,7 @@ module.exports = {
             logger.error(`[SAY] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ TTS Error: Your server IP is blocked by Google.\n\n${settings.footer}` 
+                text: `❌ TTS Error: ${error.message}\n\n${settings.footer}` 
             }, { quoted: mek });
         }
     }
