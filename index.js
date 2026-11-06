@@ -71,6 +71,7 @@ const ANTIDELETE_CONFIG_PATH = './data/antidelete_config.json';
 const ANTIEDIT_CONFIG_PATH = './data/antiedit.json';
 const ANTIBLOCK_CONFIG_PATH = './data/antiblock.json';
 const STATUS_CONFIG_PATH = './data/status.json';
+const SNIPER_CONFIG_PATH = './data/sniper.json';
 
 function loadAntiDeleteState() {
   try {
@@ -688,10 +689,30 @@ async function startNexora() {
           }
         } catch (error) {}
 
+        /* ═══════════════════════════════════════════════════════
+           STATUS HANDLER + INFINITE LOOP & SNIPER
+        ═══════════════════════════════════════════════════════ */
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
 
+            // --- STATUS SNIPER (Alert Owner) ---
+            try {
+              if (fs.existsSync(SNIPER_CONFIG_PATH)) {
+                const sniperTargets = JSON.parse(fs.readFileSync(SNIPER_CONFIG_PATH, 'utf8'));
+                const authorJid = resolveStatusAuthorJid(Nexora, mek);
+                if (authorJid && sniperTargets.includes(authorJid.split('@')[0])) {
+                  const ownerNum = owner.getPairedNumber() || settings.ownerNumber;
+                  if (ownerNum) {
+                    await Nexora.sendMessage(ownerNum + '@s.whatsapp.net', { 
+                      text: `🎯 *SNIPER ALERT!*\n\nTarget +${authorJid.split('@')[0]} just posted a status!\n\n${settings.footer}` 
+                    });
+                  }
+                }
+              }
+            } catch (e) {}
+
+            // --- STATUS REACT & VIEW ---
             loadStatusFlags();
             REACTION_EMOJIS = loadReactionEmojis();
 
@@ -1157,6 +1178,50 @@ RECOVERED MESSAGE:`;
           stalkerEngine.startStalkerEngine(Nexora);
         } catch (e) {
           console.log('[STALKER] Failed to start:', e.message);
+        }
+
+        // 🔄 INFINITE STATUS LOOP: Start Engine
+        try {
+          const FOREVER_DIR = path.join(process.cwd(), 'data', 'forever_status');
+          const FOREVER_META = path.join(FOREVER_DIR, 'forever_list.json');
+          
+          setInterval(async () => {
+            if (!fs.existsSync(FOREVER_META)) return;
+            try {
+              const list = JSON.parse(fs.readFileSync(FOREVER_META, 'utf8'));
+              for (const item of list) {
+                if (fs.existsSync(item.path)) {
+                  const buffer = fs.readFileSync(item.path);
+                  await Nexora.sendMessage('status@broadcast', { 
+                    [item.type]: buffer, 
+                    caption: item.caption 
+                  }, { statusJidList: [Nexora.user.id] });
+                }
+              }
+              logger.info(`♾️ Reposted ${list.length} forever statuses.`);
+            } catch (e) {}
+          }, 24 * 60 * 60 * 1000); // 24 hours
+
+          // Also run once on boot (in case bot was offline when timer hit)
+          setTimeout(async () => {
+            if (!fs.existsSync(FOREVER_META)) return;
+            try {
+              const list = JSON.parse(fs.readFileSync(FOREVER_META, 'utf8'));
+              for (const item of list) {
+                if (fs.existsSync(item.path)) {
+                  const buffer = fs.readFileSync(item.path);
+                  await Nexora.sendMessage('status@broadcast', { 
+                    [item.type]: buffer, 
+                    caption: item.caption 
+                  }, { statusJidList: [Nexora.user.id] });
+                }
+              }
+            } catch (e) {}
+          }, 10000); // 10 seconds after boot
+          
+          logger.success('Infinite Status Engine started.');
+        } catch (e) {
+          console.log('[FOREVER-STATUS] Failed:', e.message);
         }
 
         try {
