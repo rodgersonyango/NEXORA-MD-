@@ -25,7 +25,6 @@ module.exports = {
             return conn.sendMessage(chatId, { text: `❌ You need at least one message.\nExample: ${settings.prefix}fc Me | Hello` }, { quoted: mek });
         }
 
-        // Build messages array for the API
         const messages = [];
         let isUser1 = true;
 
@@ -45,22 +44,15 @@ module.exports = {
         await conn.sendMessage(chatId, { text: `📱 *Generating Fake Chat...*` }, { quoted: mek });
 
         try {
-            // Using MockScreenshots API - reliable and actively maintained
-            const response = await axios.post('https://api.mockscreenshots.com/v1/render', {
-                platform: 'whatsapp',
-                contact: messages[0]?.name || 'Chat',
-                dark: true,
-                messages: messages.map((m, index) => ({
-                    text: m.message,
-                    sender: m.isUser ? 'me' : 'them',
-                    time: new Date(Date.now() + index * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
-                    ticks: 'read'
-                }))
+            // Popcat API - working endpoint
+            const response = await axios.post('https://api.popcat.xyz/v2/fakechat', {
+                messages: messages
             }, {
                 responseType: 'arraybuffer',
                 timeout: 30000,
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'User-Agent': 'Mozilla/5.0'
                 }
             });
 
@@ -81,7 +73,7 @@ module.exports = {
             logger.error(`[FAKECHAT] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ Failed to generate chat.\nReason: ${error.message}\n\n_Note: Free APIs can be unreliable. If this keeps failing, we may need to switch to a different provider._\n\n${settings.footer}` 
+                text: `❌ Failed to generate chat.\nReason: ${error.message}\n\n_Free APIs can be unreliable. If this keeps failing, we may need to self-host a renderer._\n\n${settings.footer}` 
             }, { quoted: mek });
         }
     }
