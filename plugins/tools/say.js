@@ -6,27 +6,34 @@ module.exports = {
     name: 'say',
     aliases: ['tts', 'voice'],
     category: 'tools',
-    description: 'Generate an AI Voice Note (Supports: Brian, Emma, Amy, Joanna)',
+    description: 'Generate an AI Voice Note (Male or Female)',
     usage: '.say <voice> <text>',
     react: '🎙️',
 
     async execute(conn, mek, args, chatId) {
         if (args.length === 0) {
             return conn.sendMessage(chatId, { 
-                text: `❌ Please provide text.\n\n*Example:*\n${settings.prefix}say Brian Hello world\n${settings.prefix}say Emma I am a girl\n\n*Available voices:* Brian, Emma, Amy, Joanna\n\n${settings.footer}` 
+                text: `❌ Please provide text.\n\n*Example:*\n${settings.prefix}say Brian Hello world\n${settings.prefix}say Emma I am a girl\n\n*Voices:* Brian (Male), Emma (Female), Amy (Female)\n\n${settings.footer}` 
             }, { quoted: mek });
         }
 
         // Default voice
-        let voice = 'Brian';
+        let voice = 'en-US-BrianNeural';
         let text = args.join(' ');
 
         // Check if the first word is a valid voice name
-        const voiceList = ['Brian', 'Emma', 'Amy', 'Joanna', 'Salli', 'Matthew', 'Ivy', 'Justin'];
-        const firstWord = args[0].charAt(0).toUpperCase() + args[0].slice(1).toLowerCase();
+        const voiceMap = {
+            'brian': 'en-US-BrianNeural',
+            'emma': 'en-US-EmmaNeural',
+            'amy': 'en-US-AriaNeural',
+            'guy': 'en-US-GuyNeural',
+            'sara': 'en-US-SaraNeural'
+        };
         
-        if (voiceList.includes(firstWord)) {
-            voice = firstWord;
+        const firstWord = args[0].toLowerCase();
+        
+        if (voiceMap[firstWord]) {
+            voice = voiceMap[firstWord];
             text = args.slice(1).join(' '); // Remove the voice name from the text
         }
 
@@ -39,8 +46,8 @@ module.exports = {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
         try {
-            // StreamElements TTS API (No API key needed!)
-            const url = `https://api.streamelements.com/kappa/v2/speech?voice=${voice}&text=${encodeURIComponent(text)}`;
+            // Using a super reliable Edge-TTS API (No key required)
+            const url = `https://api.nexoracle.com/ai/tts?text=${encodeURIComponent(text)}&voice=${voice}&apikey=free_key`;
 
             const response = await axios.get(url, {
                 responseType: 'arraybuffer',
@@ -50,8 +57,8 @@ module.exports = {
             const buffer = Buffer.from(response.data);
 
             // Basic check to ensure it's not an error message
-            if (buffer.length < 1000) {
-                throw new Error("Failed to generate audio. The API might be down.");
+            if (buffer.length < 2000) {
+                throw new Error("Failed to generate audio. The text might be too short.");
             }
 
             // Send as a WhatsApp Voice Note
@@ -67,7 +74,7 @@ module.exports = {
             logger.error(`[SAY] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ TTS Error: The voice API is currently unavailable. Try again later.\n\n${settings.footer}` 
+                text: `❌ TTS Error: ${error.message}\n\n${settings.footer}` 
             }, { quoted: mek });
         }
     }
