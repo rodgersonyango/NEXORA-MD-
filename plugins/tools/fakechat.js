@@ -1,7 +1,6 @@
 const axios = require('axios');
 const settings = require('../../settings');
 const logger = require('../../lib/logger');
-const { downloadMediaMessage } = require('@whiskeysockets/baileys');
 
 module.exports = {
     name: 'fakechat',
@@ -20,15 +19,13 @@ module.exports = {
             }, { quoted: mek });
         }
 
-        // Split the input by the pipe symbol
         const parts = input.split('|').map(p => p.trim());
         
         if (parts.length < 2) {
             return conn.sendMessage(chatId, { text: `❌ You need at least one message.\nExample: ${settings.prefix}fc Me | Hello` }, { quoted: mek });
         }
 
-        // Build the messages array for the API
-        // Alternates between User 1 and User 2
+        // Build messages array for the API
         const messages = [];
         let isUser1 = true;
 
@@ -41,20 +38,30 @@ module.exports = {
                 message: text,
                 isUser: isUser1
             });
-            isUser1 = !isUser1; // Alternate user side
+            isUser1 = !isUser1;
         }
 
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
         await conn.sendMessage(chatId, { text: `📱 *Generating Fake Chat...*` }, { quoted: mek });
 
         try {
-            // Use Popcat API to render the fake chat
-            // We use POST to send the complex JSON data
-            const response = await axios.post('https://api.popcat.xyz/v2/fakechat', {
-                messages: messages
+            // Using MockScreenshots API - reliable and actively maintained
+            const response = await axios.post('https://api.mockscreenshots.com/v1/render', {
+                platform: 'whatsapp',
+                contact: messages[0]?.name || 'Chat',
+                dark: true,
+                messages: messages.map((m, index) => ({
+                    text: m.message,
+                    sender: m.isUser ? 'me' : 'them',
+                    time: new Date(Date.now() + index * 60000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    ticks: 'read'
+                }))
             }, {
                 responseType: 'arraybuffer',
-                timeout: 30000
+                timeout: 30000,
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
 
             const buffer = Buffer.from(response.data);
@@ -74,7 +81,7 @@ module.exports = {
             logger.error(`[FAKECHAT] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ Failed to generate chat.\nReason: ${error.message}\n\n${settings.footer}` 
+                text: `❌ Failed to generate chat.\nReason: ${error.message}\n\n_Note: Free APIs can be unreliable. If this keeps failing, we may need to switch to a different provider._\n\n${settings.footer}` 
             }, { quoted: mek });
         }
     }
