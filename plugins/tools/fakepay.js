@@ -16,7 +16,7 @@ module.exports = {
 
         if (!amount || isNaN(amount)) {
             return conn.sendMessage(chatId, { 
-                text: `❌ Provide an amount.\nExample: ${settings.prefix}mpesa 5000 Lariqueen Achieng\n\n${settings.footer}` 
+                text: `❌ Provide an amount.\nExample: ${settings.prefix}mpesa 5000 Kelly Rodgers\n\n${settings.footer}` 
             }, { quoted: mek });
         }
 
