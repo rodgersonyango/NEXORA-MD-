@@ -1,10 +1,3 @@
-/**
- * NEXORA MD - Main Handlers (corrected)
- * Fixes: sender normalization, silent-reveal flow, auto-chatbot gating,
- * cached banned_groups, safe watchers, group self-welcome skip,
- * interactive-message text extraction, unknown-command echo cap.
- */
-
 const settings = require('./settings');
 const axios = require('axios');
 const fs = require('fs');
@@ -17,13 +10,9 @@ const logger = require('./lib/logger');
 
 const cleanNumber = owner.cleanNumber;
 
-// ═══════════════════════════════════════════════════════
-// EMOJI COMMAND DETECTION (FIX 5: grapheme-aware)
-// ═══════════════════════════════════════════════════════
 function isEmojiCommand(text) {
   if (!text || text.length === 0) return false;
 
-  // Grapheme-aware path (Node 16+)
   if (typeof Intl !== 'undefined' && Intl.Segmenter) {
     try {
       const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
@@ -31,7 +20,7 @@ function isEmojiCommand(text) {
       if (graphemes.length === 0 || graphemes.length > 3) return false;
       const singleEmoji = /^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}\u{2190}-\u{21FF}]+$/u;
       return graphemes.every(g => singleEmoji.test(g));
-    } catch (e) { /* fall through */ }
+    } catch (e) {}
   }
 
   const emojiRegex = /^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}]+$/u;
@@ -44,9 +33,6 @@ function getBotOwnerNumber() {
   return settings.ownerNumber || null;
 }
 
-// ═══════════════════════════════════════════════════════
-// MEDIA EXTRACTION (FIX 14: include document)
-// ═══════════════════════════════════════════════════════
 function extractMedia(quoted) {
   if (!quoted) return null;
 
@@ -81,9 +67,6 @@ async function downloadMedia(mediaInfo) {
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// AFK HELPERS
-// ═══════════════════════════════════════════════════════
 function readAFK() {
   try {
     if (fs.existsSync('./data/afk.json')) {
@@ -99,9 +82,6 @@ function writeAFK(data) {
   } catch (e) {}
 }
 
-// ═══════════════════════════════════════════════════════
-// BANNED GROUPS — cached (FIX 7)
-// ═══════════════════════════════════════════════════════
 let _banCache = { data: null, at: 0 };
 const BAN_TTL_MS = 60 * 1000;
 
@@ -118,9 +98,6 @@ function getBannedGroups() {
   return _banCache.data;
 }
 
-// ═══════════════════════════════════════════════════════
-// SAFE WATCHER WRAPPER (FIX 8: surface errors once per 5min)
-// ═══════════════════════════════════════════════════════
 const _watcherErrSeen = new Map();
 
 function safeWatcher(name, fn) {
@@ -138,17 +115,11 @@ function safeWatcher(name, fn) {
   };
 }
 
-// ═══════════════════════════════════════════════════════
-// RAW SEND — bypasses channel branding
-// ═══════════════════════════════════════════════════════
 function rawSend(conn, jid, content, options = {}) {
   const fn = global.rawSendMessage || conn.sendMessage.bind(conn);
   return fn(jid, content, options);
 }
 
-// ═══════════════════════════════════════════════════════
-// SILENT REVEAL — internal fallback (FIX 10: skip self-send)
-// ═══════════════════════════════════════════════════════
 async function silentReveal(conn, mek, chatId) {
   try {
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
@@ -162,7 +133,6 @@ async function silentReveal(conn, mek, chatId) {
 
     const ownerJid = ownerNumber.includes('@') ? ownerNumber : ownerNumber + '@s.whatsapp.net';
 
-    // FIX 10: avoid self-send loop
     if (ownerJid === chatId) return false;
 
     const buffer = await downloadMedia(mediaInfo);
@@ -172,15 +142,7 @@ async function silentReveal(conn, mek, chatId) {
                                   : (mek.key.participant || mek.key.remoteJid);
     const senderNumber = cleanNumber(sender);
 
-    const caption = `SILENT REVEAL
-
-From: ${senderNumber}
-Chat: ${chatId.split('@')[0]}
-Time: ${new Date().toLocaleString()}
-
-${mediaInfo.caption ? `Caption:\n${mediaInfo.caption}` : ''}
-
-${settings.footer}`;
+    const caption = `SILENT REVEAL\n\nFrom: ${senderNumber}\nChat: ${chatId.split('@')[0]}\nTime: ${new Date().toLocaleString()}\n\n${mediaInfo.caption ? `Caption:\n${mediaInfo.caption}` : ''}\n\n${settings.footer}`;
 
     const content = { caption };
     if (mediaInfo.type === 'image') content.image = buffer;
@@ -197,9 +159,6 @@ ${settings.footer}`;
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// AUTO CHATBOT (FIX 3 + 11 + 12)
-// ═══════════════════════════════════════════════════════
 async function handleAutoChatBot(conn, mek) {
   try {
     if (!global.autoChatBot) return;
@@ -215,12 +174,10 @@ async function handleAutoChatBot(conn, mek) {
     const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
                                   : (mek.key.participant || mek.key.remoteJid);
 
-    // FIX 3: respect private mode
     const currentMode = mode.getMode(settings.mode || 'public');
     const isOwnerSender = owner.isOwner(sender, conn);
     if (currentMode === 'private' && !isOwnerSender) return;
 
-    // FIX 11: rate limit non-owners (separate bucket)
     if (!isOwnerSender && !rateLimit.isAllowed(String(sender) + ':bot', 5)) return;
 
     let text = '';
@@ -252,7 +209,6 @@ async function handleAutoChatBot(conn, mek) {
     }
 
     if (reply) {
-      // FIX 12: don't let 'forbidden' bubble up
       try {
         await rawSend(conn, chatId, { text: reply });
       } catch (e) {
@@ -266,9 +222,6 @@ async function handleAutoChatBot(conn, mek) {
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// TEXT EXTRACTOR (FIX 15)
-// ═══════════════════════════════════════════════════════
 function extractText(msg) {
   if (!msg) return '';
   if (msg.conversation) return msg.conversation;
@@ -282,9 +235,6 @@ function extractText(msg) {
   return '';
 }
 
-// ═══════════════════════════════════════════════════════
-// MAIN MESSAGE HANDLER
-// ═══════════════════════════════════════════════════════
 async function handleMessages(conn, chatUpdate, isOwnerFlag) {
   try {
     const mek = chatUpdate.messages[0];
@@ -295,12 +245,10 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     const isChannel = chatId.includes('@newsletter');
     if (isStatus || isChannel) return;
 
-    // FIX 1: normalize sender once, honoring @lid
     const sender = conn.decodeJid
       ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
       : (mek.key.participant || mek.key.remoteJid);
 
-    // BANNED GROUPS WATCHDOG (FIX 7: cached read)
     if (chatId.endsWith('@g.us')) {
       try {
         const banned = getBannedGroups();
@@ -314,9 +262,6 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     const text = extractText(mek.message);
     const prefix = settings.prefix || '.';
 
-    // ═════════════════════════════════════════
-    // PRIORITY 1 — AFK AUTO-REPLY (FIX 6: don't self-reply)
-    // ═════════════════════════════════════════
     try {
       const afkStore = readAFK();
       const senderNumCheck = cleanNumber(sender);
@@ -348,9 +293,6 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
       }
     } catch (e) {}
 
-    // ═════════════════════════════════════════
-    // PRIORITY 2 — SILENT VIEW-ONCE REVEAL (FIX 2)
-    // ═════════════════════════════════════════
     if (text && text.startsWith(prefix) && text.length > prefix.length) {
       const afterPrefixCheck = text.slice(prefix.length).trim();
 
@@ -371,14 +313,11 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
             if (revealed) return;
           }
         }
-        // If not revealed, fall through to normal command parsing
       }
     }
 
-    // AUTO-CHATBOT
     try { await handleAutoChatBot(conn, mek); } catch (e) {}
 
-    // GROUP WATCHERS (FIX 8: safe wrappers)
     if (chatId.endsWith('@g.us')) {
       try { const { antiLinkWatcher } = require('./plugins/group/antilink'); await safeWatcher('antilink', antiLinkWatcher)(conn, mek, chatId); } catch (e) {}
       try { const { antiBadWatcher } = require('./plugins/group/antibad'); await safeWatcher('antibad', antiBadWatcher)(conn, mek, chatId); } catch (e) {}
@@ -397,7 +336,6 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     const rawCommand = parts[0];
     const args = parts.slice(1);
 
-    // FIX 2: emoji block REMOVED here — already handled above
     if (isEmojiCommand(rawCommand)) return;
 
     const commandName = rawCommand.toLowerCase();
@@ -420,13 +358,13 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
       }
 
       try {
+        await new Promise(resolve => setTimeout(resolve, 1000));
         await command.execute(conn, mek, args, chatId, isBotOwner);
       } catch (error) {
         logger.error(`Error executing ${commandName}: ${error.message}`);
         try { await conn.sendMessage(chatId, { react: { text: settings.reactionError, key: mek.key } }); } catch (e) {}
       }
     } else {
-      // FIX 13: don't spam unknown-command in groups; cap echo
       if (currentMode !== 'private' && !chatId.endsWith('@g.us')) {
         const safe = text.slice(0, 80);
         try {
@@ -439,9 +377,6 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
   }
 }
 
-// ═══════════════════════════════════════════════════════
-// GROUP PARTICIPANT UPDATE (FIX 4: skip self-welcome)
-// ═══════════════════════════════════════════════════════
 async function handleGroupParticipantUpdate(conn, update) {
   try {
     logger.info(`Group update: ${update.id} (${update.action})`);
@@ -460,7 +395,7 @@ async function handleGroupParticipantUpdate(conn, update) {
     const botJid = conn.user?.id ? conn.user.id.split(':')[0] + '@s.whatsapp.net' : null;
 
     for (const participant of update.participants || []) {
-      if (botJid && participant === botJid) continue; // FIX 4
+      if (botJid && participant === botJid) continue;
       if (update.action === 'add' && groupCfg.welcome) {
         const text = `👋 Welcome @${participant.split('@')[0]} to the group!\n\n${settings.footer}`;
         try { await conn.sendMessage(update.id, { text, mentions: [participant] }); } catch (e) {}
@@ -478,7 +413,6 @@ module.exports = {
   handleMessages,
   handleGroupParticipantUpdate,
   handleAutoChatBot,
-  // exports for use by plugins that need them
   extractMedia,
   extractText,
   isEmojiCommand
