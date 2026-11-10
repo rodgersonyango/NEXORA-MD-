@@ -7,46 +7,57 @@ module.exports = {
     name: 'undelete',
     aliases: ['ud', 'recover', 'retrieve'],
     category: 'tools',
-    description: 'Recover a deleted message by replying to it',
-    usage: '.undelete (Reply to a deleted message)',
+    description: 'Recover the most recently deleted message in the chat',
+    usage: '.ud',
     react: '🕵️‍♂️',
 
     async execute(conn, mek, args, chatId) {
-        // 1. Get the quoted message context
-        const contextInfo = mek.message?.extendedTextMessage?.contextInfo;
-        const quotedMsg = contextInfo?.quotedMessage;
-
-        if (!quotedMsg || !contextInfo?.stanzaId) {
-            return conn.sendMessage(chatId, { 
-                text: `❌ You must reply to a *deleted message* (the "This message was deleted" placeholder) to recover it.\n\n${settings.footer}` 
-            }, { quoted: mek });
-        }
-
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
         try {
-            const messageId = contextInfo.stanzaId;
-            const sender = contextInfo.participant || contextInfo.remoteJid;
-
-            // 2. Try to find the message in the lightweight store
-            let originalMsg = await store.loadMessage(chatId, messageId);
-
-            // If not found, try scanning the store bucket directly
-            if (!originalMsg && store.messages && store.messages[chatId]) {
-                if (store.messages[chatId][messageId]) {
-                    originalMsg = store.messages[chatId][messageId];
-                }
-            }
-
-            // 3. If we still can't find it, fail gracefully
-            if (!originalMsg || !originalMsg.message) {
+            // 1. Check if we have messages cached for this chat
+            if (!store.messages || !store.messages[chatId] || Object.keys(store.messages[chatId]).length === 0) {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *Message not found in cache.*\n\nI can only recover messages that were sent *after* I was connected and the anti-delete feature was enabled.\n\n${settings.footer}` 
+                    text: `❌ *No messages in cache.*\n\nI can only recover messages that were sent *after* the bot was turned on.\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
-            // 4. Send the recovered message back to the chat
-            const m = originalMsg.message;
+            // 2. Get the message IDs in this chat
+            const messageIds = Object.keys(store.messages[chatId]);
+            
+            // 3. Get the LAST 5 messages (most recent)
+            const recentIds = messageIds.slice(-5);
+            let foundMessage = null;
+            let foundId = null;
+
+            // 4. Look for a message that isn't a command or a bot message
+            for (let i = recentIds.length - 1; i >= 0; i--) {
+                const id = recentIds[i];
+                const msg = store.messages[chatId][id];
+                
+                if (msg && msg.message) {
+                    // Skip the user's ".ud" command itself
+                    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
+                    if (text.toLowerCase().includes(settings.prefix + 'ud') || text.toLowerCase().includes(settings.prefix + 'undelete')) {
+                        continue;
+                    }
+                    
+                    foundMessage = msg;
+                    foundId = id;
+                    break;
+                }
+            }
+
+            // 5. If we couldn't find anything
+            if (!foundMessage) {
+                return conn.sendMessage(chatId, { 
+                    text: `❌ *No recent messages found to recover.*\n\nTry sending a test message, delete it, and type .ud again.\n\n${settings.footer}` 
+                }, { quoted: mek });
+            }
+
+            // 6. Extract content
+            const m = foundMessage.message;
+            const sender = foundMessage.key?.participant || foundMessage.key?.remoteJid || 'Unknown';
             const textContent = 
                 m.conversation || 
                 m.extendedTextMessage?.text || 
@@ -55,12 +66,10 @@ module.exports = {
                 m.documentMessage?.caption || null;
 
             let content = {};
-            let type = 'text';
 
             if (textContent) {
-                content = { text: `🕵️‍♂️ *RECOVERED MESSAGE*\n\n${textContent}\n\n${settings.footer}` };
+                content = { text: `🕵️‍♂️ *RECOVERED MESSAGE*\nFrom: @${sender.split('@')[0]}\n\n${textContent}\n\n${settings.footer}`, mentions: [sender] };
             } else if (m.imageMessage || m.videoMessage || m.audioMessage || m.documentMessage) {
-                // Download media if it's media
                 let mediaType, mediaMsg;
                 if (m.imageMessage) { mediaType = 'image'; mediaMsg = m.imageMessage; }
                 else if (m.videoMessage) { mediaType = 'video'; mediaMsg = m.videoMessage; }
@@ -82,11 +91,11 @@ module.exports = {
                 if (mediaType === 'audio' && mediaMsg.ptt) content.ptt = true;
             } else {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *Unsupported message type.* I can only recover text, images, videos, audio, and documents.\n\n${settings.footer}` 
+                    text: `❌ *Unsupported message type.*\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
-            // Send it
+            // 7. Send it back
             await conn.sendMessage(chatId, content, { quoted: mek });
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
