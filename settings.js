@@ -75,7 +75,7 @@ const settings = {
 
   rateLimitPerMinute: 10,
 
-  antiDelete: false,
+  antiDelete: true,
   antiCall: false,
   ghostMode: false,
   autoTyping: false,
