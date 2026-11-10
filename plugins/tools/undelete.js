@@ -1,3 +1,5 @@
+const fs = require('fs');
+const path = require('path');
 const settings = require('../../settings');
 const logger = require('../../lib/logger');
 const store = require('../../lib/lightweight_store');
@@ -15,49 +17,47 @@ module.exports = {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
         try {
-            // 1. Check if we have messages cached for this chat
-            if (!store.messages || !store.messages[chatId] || Object.keys(store.messages[chatId]).length === 0) {
-                return conn.sendMessage(chatId, { 
-                    text: `❌ *No messages in cache.*\n\nI can only recover messages that were sent *after* the bot was turned on.\n\n${settings.footer}` 
-                }, { quoted: mek });
-            }
-
-            // 2. Get the message IDs in this chat
-            const messageIds = Object.keys(store.messages[chatId]);
+            // 1. Read the last deleted ID from the file
+            const DELETED_FILE = path.join(process.cwd(), 'data', 'last_deleted.json');
             
-            // 3. Get the LAST 5 messages (most recent)
-            const recentIds = messageIds.slice(-5);
-            let foundMessage = null;
-            let foundId = null;
-
-            // 4. Look for a message that isn't a command or a bot message
-            for (let i = recentIds.length - 1; i >= 0; i--) {
-                const id = recentIds[i];
-                const msg = store.messages[chatId][id];
-                
-                if (msg && msg.message) {
-                    // Skip the user's ".ud" command itself
-                    const text = msg.message.conversation || msg.message.extendedTextMessage?.text || '';
-                    if (text.toLowerCase().includes(settings.prefix + 'ud') || text.toLowerCase().includes(settings.prefix + 'undelete')) {
-                        continue;
-                    }
-                    
-                    foundMessage = msg;
-                    foundId = id;
-                    break;
-                }
-            }
-
-            // 5. If we couldn't find anything
-            if (!foundMessage) {
+            if (!fs.existsSync(DELETED_FILE)) {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *No recent messages found to recover.*\n\nTry sending a test message, delete it, and type .ud again.\n\n${settings.footer}` 
+                    text: `❌ *No deleted messages found.*\n\nWait for someone to delete a message, then type .ud\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
-            // 6. Extract content
-            const m = foundMessage.message;
-            const sender = foundMessage.key?.participant || foundMessage.key?.remoteJid || 'Unknown';
+            const deletedData = JSON.parse(fs.readFileSync(DELETED_FILE, 'utf8'));
+            const lastDeletedId = deletedData[chatId]; // Get the ID for this specific chat
+
+            if (!lastDeletedId) {
+                return conn.sendMessage(chatId, { 
+                    text: `❌ *No deleted messages found in this chat.*\n\n${settings.footer}` 
+                }, { quoted: mek });
+            }
+
+            // 2. Find the exact message in the store
+            let originalMsg = null;
+            if (store.messages && store.messages[chatId] && store.messages[chatId][lastDeletedId]) {
+                originalMsg = store.messages[chatId][lastDeletedId];
+            }
+
+            if (!originalMsg || !originalMsg.message) {
+                return conn.sendMessage(chatId, { 
+                    text: `❌ *Message not found in cache.* It might be too old or the bot restarted.\n\n${settings.footer}` 
+                }, { quoted: mek });
+            }
+
+            // 3. Extract content safely
+            const m = originalMsg.message;
+            
+            // Ignore protocol messages (like the delete command itself)
+            if (m.protocolMessage || m.senderKeyDistributionMessage) {
+                 return conn.sendMessage(chatId, { 
+                    text: `❌ *The last deleted message was a system event, not a text/media message.*\n\n${settings.footer}` 
+                }, { quoted: mek });
+            }
+
+            const sender = originalMsg.key?.participant || originalMsg.key?.remoteJid || 'Unknown';
             const textContent = 
                 m.conversation || 
                 m.extendedTextMessage?.text || 
@@ -91,11 +91,11 @@ module.exports = {
                 if (mediaType === 'audio' && mediaMsg.ptt) content.ptt = true;
             } else {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *Unsupported message type.*\n\n${settings.footer}` 
+                    text: `❌ *Unsupported message type.* (e.g., stickers or polls are not supported yet).\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
-            // 7. Send it back
+            // 4. Send it back
             await conn.sendMessage(chatId, content, { quoted: mek });
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
