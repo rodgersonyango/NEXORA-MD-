@@ -816,6 +816,45 @@ async function startNexora() {
               fs.writeFileSync(DELETED_FILE, JSON.stringify(deletedData, null, 2));
             } catch (e) {}
 
+            try {
+              const VAULT_DIR = path.join(process.cwd(), 'data', 'vault');
+              const vaultConfigPath = path.join(VAULT_DIR, 'config.json');
+              
+              if (fs.existsSync(vaultConfigPath)) {
+                const config = JSON.parse(fs.readFileSync(vaultConfigPath, 'utf8'));
+                
+                if (config[key.remoteJid]) {
+                  let vaultMsg = await store.loadMessage(key.remoteJid, key.id);
+                  if (!vaultMsg && store.messages && store.messages[key.remoteJid]) {
+                    vaultMsg = store.messages[key.remoteJid][key.id];
+                  }
+
+                  if (vaultMsg && vaultMsg.message) {
+                    const m = vaultMsg.message;
+                    const text = m.conversation || m.extendedTextMessage?.text || m.imageMessage?.caption || m.videoMessage?.caption || '[Media]';
+                    const sender = key.participant || key.remoteJid;
+                    let senderName = 'Unknown';
+                    try { senderName = await Nexora.getName(sender) || sender.split('@')[0]; } catch(e){}
+
+                    const chatVaultPath = path.join(VAULT_DIR, `${key.remoteJid.replace(/[^0-9]/g, '')}.json`);
+                    let vaultData = {};
+                    if (fs.existsSync(chatVaultPath)) {
+                      vaultData = JSON.parse(fs.readFileSync(chatVaultPath, 'utf8'));
+                    }
+
+                    vaultData[key.id] = {
+                      senderName: senderName,
+                      senderJid: sender,
+                      text: text,
+                      timestamp: new Date().toLocaleString()
+                    };
+
+                    fs.writeFileSync(chatVaultPath, JSON.stringify(vaultData, null, 2));
+                  }
+                }
+              }
+            } catch (e) {}
+
             const rawJid = key.remoteJid;
             const normalizedJid = normalizeJidForStore(rawJid);
 
