@@ -2,12 +2,9 @@ const settings = require('../../settings');
 const axios = require('axios');
 const logger = require('../../lib/logger');
 
-// 🔥 YOUR VERCEL URL
-const MY_WEBSITE_API = 'https://queenbella-fb-dl.vercel.app/api/aio'; 
-
 module.exports = {
     name: 'aio',
-    aliases: ['downr', 'alldl', 'universal'],
+    aliases: ['downr', 'alldl', 'universal', 'fb', 'tiktok'],
     category: 'download',
     description: 'All-in-one downloader (FB, TikTok, IG, Twitter)',
     usage: '.aio <url>',
@@ -23,52 +20,43 @@ module.exports = {
         }
 
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `🚀 *Connecting to Proxy Server...*` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `🚀 *Fetching media...*` }, { quoted: mek });
 
         try {
-            // Ask your Vercel site to do the hard work
-            const response = await axios.get(MY_WEBSITE_API, {
-                params: { url: url },
-                timeout: 45000
-            });
+            // Use a public API that handles multiple platforms
+            const apiUrl = `https://api.nexoracle.com/downloader/aio?url=${encodeURIComponent(url)}&apikey=free_key`;
             
+            const response = await axios.get(apiUrl, { timeout: 30000 });
             const data = response.data;
 
-            if (data.error) {
-                throw new Error(data.error);
+            if (data.status !== 200 && !data.result) {
+                throw new Error(data.message || 'API returned an error.');
             }
 
-            const medias = data.medias || [];
-            if (medias.length === 0) {
-                throw new Error('No media found in the response.');
+            const result = data.result;
+            let videoUrl = null;
+            let title = result.title || 'Downloaded Media';
+
+            // Handle different response structures
+            if (result.medias && result.medias.length > 0) {
+                // Find the best video
+                const video = result.medias.find(m => m.type === 'video' || m.extension === 'mp4');
+                videoUrl = video ? video.url : result.medias[0].url;
+            } else if (result.video) {
+                videoUrl = result.video;
+            } else if (result.url) {
+                videoUrl = result.url;
             }
 
-            // Sort to prefer HD/Video
-            const video = medias.find(m => m.type === 'video' && !m.is_audio);
-            const audio = medias.find(m => m.is_audio === true);
-            
-            const finalMedia = video || medias[0];
-            const title = data.title || 'Untitled Media';
-
-            // Send the video
-            if (finalMedia.type === 'video' || finalMedia.type === 'image') {
-                const content = {
-                    caption: `✅ *Download Success!*\n\n📝 Title: ${title}\n📦 Quality: ${finalMedia.quality || 'Default'}\n🌐 Source: ${data.source || 'Unknown'}\n\n${settings.footer}`
-                };
-                
-                if (finalMedia.type === 'video') content.video = { url: finalMedia.url };
-                else content.image = { url: finalMedia.url };
-
-                await conn.sendMessage(chatId, content, { quoted: mek });
-            } 
-            // Or send as audio
-            else {
-                await conn.sendMessage(chatId, {
-                    audio: { url: finalMedia.url },
-                    mimetype: 'audio/mp4',
-                    fileName: `${title}.mp3`
-                }, { quoted: mek });
+            if (!videoUrl) {
+                throw new Error('No video URL found in the response.');
             }
+
+            // Send the Video
+            await conn.sendMessage(chatId, {
+                video: { url: videoUrl },
+                caption: `✅ *Download Success!*\n\n📝 Title: ${title}\n\n${settings.footer}`
+            }, { quoted: mek });
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
@@ -76,7 +64,7 @@ module.exports = {
             logger.error(`[AIO] Error: ${error.message}`);
             await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `❌ *Download Failed*\n\nReason: ${error.message}\n\n${settings.footer}` 
+                text: `❌ *Download Failed*\n\nReason: ${error.message}\n\n*Note: Public APIs can be unreliable. Try again later.*\n\n${settings.footer}` 
             }, { quoted: mek });
         }
     }
