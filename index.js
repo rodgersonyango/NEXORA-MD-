@@ -1,9 +1,3 @@
-/**
- * NEXORA MD - WhatsApp Bot
- * Consolidated state loaders + all handlers
- * Owner: paired number (from creds.json)
- */
-
 const express = require('express');
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,7 +34,7 @@ const mode = require('./lib/mode');
 const owner = require('./lib/owner');
 const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
-const stalkerEngine = require('./lib/stalker_engine'); // 🕵️‍♂️ GHOST TRACKER
+const stalkerEngine = require('./lib/stalker_engine');
 
 const { proto } = require('@whiskeysockets/baileys');
 
@@ -94,7 +88,6 @@ function loadAntiDeleteState() {
 }
 loadAntiDeleteState();
 
-/* Status flags — reloadable at runtime so .statusreact on/off takes effect instantly */
 function loadStatusFlags() {
   try {
     if (fs.existsSync(STATUS_CONFIG_PATH)) {
@@ -504,10 +497,8 @@ async function startNexora() {
       return result;
     };
 
-    /* 🔥 THE FIX: Advanced Ghost-Clock Prevention */
     const wipeSend = async function(jid, content, options = {}) {
       try {
-        // Prevent "Waiting for this message" ghost clocks
         if (options.quoted) {
           const qMsg = options.quoted;
           if (!qMsg || !qMsg.message || !qMsg.key || !qMsg.key.id) {
@@ -579,7 +570,6 @@ async function startNexora() {
     });
     store.bind(Nexora.ev);
 
-    // 🕵️‍♂️ GHOST TRACKER: Presence Listener
     Nexora.ev.on('presence.update', async (update) => {
       try {
         await stalkerEngine.handlePresenceUpdate(Nexora, update);
@@ -592,7 +582,6 @@ async function startNexora() {
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
 
-        // 🕵️‍♂️ GHOST TRACKER: Name Change Listener
         try { await stalkerEngine.handleNameUpdate(Nexora, mek); } catch (e) {}
 
         try {
@@ -689,14 +678,10 @@ async function startNexora() {
           }
         } catch (error) {}
 
-        /* ═══════════════════════════════════════════════════════
-           STATUS HANDLER + INFINITE LOOP & SNIPER
-        ═══════════════════════════════════════════════════════ */
         try {
           if (chatId === 'status@broadcast') {
             if (!mek || !mek.message) return;
 
-            // --- STATUS SNIPER (Alert Owner) ---
             try {
               if (fs.existsSync(SNIPER_CONFIG_PATH)) {
                 const sniperTargets = JSON.parse(fs.readFileSync(SNIPER_CONFIG_PATH, 'utf8'));
@@ -712,7 +697,6 @@ async function startNexora() {
               }
             } catch (e) {}
 
-            // --- STATUS REACT & VIEW ---
             loadStatusFlags();
             REACTION_EMOJIS = loadReactionEmojis();
 
@@ -821,6 +805,16 @@ async function startNexora() {
             const key = protocol.key;
             if (!key) continue;
             if (key.fromMe) continue;
+
+            try {
+              const DELETED_FILE = './data/last_deleted.json';
+              let deletedData = {};
+              if (fs.existsSync(DELETED_FILE)) {
+                deletedData = JSON.parse(fs.readFileSync(DELETED_FILE, 'utf8'));
+              }
+              deletedData[key.remoteJid] = key.id;
+              fs.writeFileSync(DELETED_FILE, JSON.stringify(deletedData, null, 2));
+            } catch (e) {}
 
             const rawJid = key.remoteJid;
             const normalizedJid = normalizeJidForStore(rawJid);
@@ -1173,18 +1167,16 @@ RECOVERED MESSAGE:`;
           console.log('[ANTIMUTE] Failed to start engine:', e.message);
         }
 
-        // 🕵️‍♂️ GHOST TRACKER: Start Engine
         try {
           stalkerEngine.startStalkerEngine(Nexora);
         } catch (e) {
           console.log('[STALKER] Failed to start:', e.message);
         }
 
-        // 🔄 INFINITE STATUS LOOP: Start Engine
         try {
           const FOREVER_DIR = path.join(process.cwd(), 'data', 'forever_status');
           const FOREVER_META = path.join(FOREVER_DIR, 'forever_list.json');
-          
+
           setInterval(async () => {
             if (!fs.existsSync(FOREVER_META)) return;
             try {
@@ -1200,9 +1192,8 @@ RECOVERED MESSAGE:`;
               }
               logger.info(`♾️ Reposted ${list.length} forever statuses.`);
             } catch (e) {}
-          }, 24 * 60 * 60 * 1000); // 24 hours
+          }, 24 * 60 * 60 * 1000);
 
-          // Also run once on boot (in case bot was offline when timer hit)
           setTimeout(async () => {
             if (!fs.existsSync(FOREVER_META)) return;
             try {
@@ -1217,8 +1208,8 @@ RECOVERED MESSAGE:`;
                 }
               }
             } catch (e) {}
-          }, 10000); // 10 seconds after boot
-          
+          }, 10000);
+
           logger.success('Infinite Status Engine started.');
         } catch (e) {
           console.log('[FOREVER-STATUS] Failed:', e.message);
