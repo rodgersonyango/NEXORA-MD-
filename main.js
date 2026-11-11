@@ -358,7 +358,7 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
       }
 
       try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 2500));
         await command.execute(conn, mek, args, chatId, isBotOwner);
       } catch (error) {
         logger.error(`Error executing ${commandName}: ${error.message}`);
