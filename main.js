@@ -339,8 +339,21 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     if (isEmojiCommand(rawCommand)) return;
 
     const commandName = rawCommand.toLowerCase();
-    const isBotOwner = owner.isOwner(sender, conn);
+    let isBotOwner = owner.isOwner(sender, conn);
     const currentMode = mode.getMode(settings.mode || 'public');
+
+    if (!isBotOwner) {
+        try {
+            const SUDO_FILE = path.join(process.cwd(), 'data', 'sudo_users.json');
+            if (fs.existsSync(SUDO_FILE)) {
+                const sudoList = JSON.parse(fs.readFileSync(SUDO_FILE, 'utf8'));
+                const senderNum = cleanNumber(sender);
+                if (sudoList.includes(senderNum)) {
+                    isBotOwner = true;
+                }
+            }
+        } catch (e) {}
+    }
 
     if (currentMode === 'private' && !isBotOwner) return;
     if (!isBotOwner && !rateLimit.isAllowed(sender, settings.rateLimitPerMinute || 10)) return;
