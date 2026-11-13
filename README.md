@@ -22,13 +22,13 @@
 ## Deploy & Access
 
 ### One-Click Deployment
-[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ROGERS-4/nexora-md)
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/rodgersonyango/NEXORA-MD-)
 [![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
 [![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy)
 
 ### Quick Links
 [![Pair Site](https://img.shields.io/badge/🔗_PAIR_BOT-Open_Pair_Site-00FF88?style=for-the-badge&logo=whatsapp&logoColor=black)](https://nexora-md-pairsite.onrender.com)
-[![Fork Repo](https://img.shields.io/badge/🍴_FORK_REPO-Click_Here-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ROGERS-4/nexora-md/fork)
+[![Fork Repo](https://img.shields.io/badge/🍴_FORK_REPO-Click_Here-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/rodgersonyango/NEXORA-MD-/fork)
 [![Portfolio](https://img.shields.io/badge/👨‍💻_DEVELOPER-View_Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://rodgers-mu.vercel.app)
 
 </div>
@@ -74,8 +74,8 @@
   
 **Powered by Rodgers**
 
-[![GitHub Follow](https://img.shields.io/github/followers/ROGERS-4?label=Follow%20Me&style=social)](https://github.com/ROGERS-4)
-[![GitHub Stars](https://img.shields.io/github/stars/ROGERS-4/nexora-md?label=Star%20Repo&style=social)](https://github.com/ROGERS-4/nexora-md)
+[![GitHub Follow](https://img.shields.io/github/followers/rodgersonyango?label=Follow%20Me&style=social)](https://github.com/rodgersonyango)
+[![GitHub Stars](https://img.shields.io/github/stars/rodgersonyango/NEXORA-MD-?label=Star%20Repo&style=social)](https://github.com/rodgersonyango/NEXORA-MD-)
 
 <img src="https://capsule-render.vercel.app/api?type=waving&color=00FF88&height=100&section=footer" width="100%"/>
 
