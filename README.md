@@ -9,69 +9,74 @@
 [![Node](https://img.shields.io/badge/Node.js-18%2B-000000?style=for-the-badge&logo=node.js)](#)
 [![Baileys](https://img.shields.io/badge/Baileys-6.7.9-000000?style=for-the-badge)](https://github.com/WhiskeySockets/Baileys)
 [![License](https://img.shields.io/badge/License-MIT-000000?style=for-the-badge)](#)
+[![Version](https://img.shields.io/badge/Version-2.0.0-00FF88?style=for-the-badge)](#)
 
-<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=500&size=20&pause=1000&color=00FF88&center=true&vCenter=true&width=600&lines=High-performance+WhatsApp+automation;Web+Pairing+%7C+Anti-Delete+%7C+Auto-Reactions;Deploy+Anywhere.+Run+Everywhere." alt="Typing"/>
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=22&pause=1000&color=00FF88&center=true&vCenter=true&width=600&lines=High-Performance+WhatsApp+Automation;Web+Pairing+%7C+Anti-Delete+%7C+Ghost+Mode;Deploy+Anywhere.+Run+Everywhere.;Built+for+the+Future." alt="Typing SVG" />
 
 </div>
 
 ---
-
-## 🚀 Quick Access
 
 <div align="center">
 
-[![Pair Site](https://img.shields.io/badge/PAIR%20BOT-Open%20Pair%20Site-00FF88?style=for-the-badge&logo=whatsapp&logoColor=black)](https://nexora-md-pairsite.onrender.com)
-[![Portfolio](https://img.shields.io/badge/DEVELOPER-View%20Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://rodgers-mu.vercel.app)
+## Deploy & Access
+
+### One-Click Deployment
+[![Deploy to Heroku](https://www.herokucdn.com/deploy/button.svg)](https://heroku.com/deploy?template=https://github.com/ROGERS-4/nexora-md)
+[![Deploy to Render](https://render.com/images/deploy-to-render-button.svg)](https://render.com/deploy)
+[![Deploy to Koyeb](https://www.koyeb.com/static/images/deploy/button.svg)](https://app.koyeb.com/deploy)
+
+### Quick Links
+[![Pair Site](https://img.shields.io/badge/🔗_PAIR_BOT-Open_Pair_Site-00FF88?style=for-the-badge&logo=whatsapp&logoColor=black)](https://nexora-md-pairsite.onrender.com)
+[![Fork Repo](https://img.shields.io/badge/🍴_FORK_REPO-Click_Here-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/ROGERS-4/nexora-md/fork)
+[![Portfolio](https://img.shields.io/badge/👨‍💻_DEVELOPER-View_Portfolio-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://rodgers-mu.vercel.app)
 
 </div>
 
 ---
 
-## 📖 System Overview
+## System Capabilities
 
-**NEXORA MD** is a high-performance WhatsApp automation engine built on the Baileys library. It operates as a linked device on your account, providing enterprise-grade features like web-based pairing, advanced security protocols (anti-delete, anti-edit), ghost mode, and robust community management tools.
+<div align="center">
 
-Unlike standard bots, NEXORA MD is optimized for stability on low-resource hosts while delivering instant response times.
+| 🔥 Engine | 🛡️ Security | 🤖 Automation |
+| :---: | :---: | :---: |
+| Web Pairing | Anti-Delete | Auto-Status View |
+| Ghost Mode | Anti-Edit | AI Chatbot |
+| Media Engine | Anti-Call | Ghost Tracker |
 
----
-
-## ⚡ Core Capabilities
-
-| Feature | Description |
-| :--- | :--- |
-| **Web Pairing** | Generate session IDs directly from a browser. No terminal access required. |
-| **Security Protocols** | Anti-Delete, Anti-Edit, Anti-Block, and Anti-Call to protect your chats. |
-| **Ghost Mode** | Read and view statuses without triggering blue ticks or read receipts. |
-| **Automation** | Auto-view statuses, random emoji reactions, and channel auto-reacts. |
-| **Media Engine** | High-speed downloaders for TikTok, YouTube, and Movies. |
-| **AI Integration** | Built-in chatbot with fallback providers for continuous uptime. |
+</div>
 
 ---
 
-## 🚀 Deployment Environment
+## Supported Hosts
 
-NEXORA MD is designed to run on almost any environment.
+<div align="center">
 
-| Host | Platform | Free Tier | Notes |
-| :--- | :--- | :--- | :--- |
-| [Katabump](https://katabump.com) | Panel | Yes | Recommended for beginners |
-| [Render](https://render.com) | Cloud | Yes | Use cron-job to prevent sleep |
-| [Koyeb](https://koyeb.com) | Cloud | Yes | Fast deployment |
-| [Railway](https://railway.app) | Cloud | Limited | Requires credit card |
-| [Termux](https://termux.dev) | Android | Yes | Local mobile hosting |
-| [VPS / Docker](https://docker.com) | Container | Self-host | Full control |
+[![Katabump](https://img.shields.io/badge/Katabump-Panel-00FF88?style=flat-square)](#)
+[![Heroku](https://img.shields.io/badge/Heroku-Cloud-430098?style=flat-square&logo=heroku)](#)
+[![Render](https://img.shields.io/badge/Render-Cloud-000000?style=flat-square&logo=render)](#)
+[![Koyeb](https://img.shields.io/badge/Koyeb-Cloud-121212?style=flat-square)](#)
+[![Railway](https://img.shields.io/badge/Railway-Cloud-0B0D0E?style=flat-square)](#)
+[![Termux](https://img.shields.io/badge/Termux-Android-000000?style=flat-square&logo=android)](#)
+
+</div>
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Quick Setup
 
-To run the bot, edit the `settings.js` file. It is separated into two sections:
+1. **Edit `settings.js`**: Add your `OWNER_NUMBER` and `SESSION_ID`.
+2. **Deploy**: Use one of the platforms above.
+3. **Pair**: Use the Pair Site link to generate your session.
 
-1. **Edit Zone:** Your number, session ID, pair site URL, and prefix.
-2. **System Zone:** Feature toggles, welcome images, channel IDs, and bot metadata.
+<div align="center">
+  
+**Powered by Rodgers**
 
-**Environment Variables (`.env`)**
-```env
-SESSION_ID=Nexora~xxxxx
-OWNER_NUMBER=2547XXXXXXXX
-PORT=3000
+[![GitHub Follow](https://img.shields.io/github/followers/ROGERS-4?label=Follow%20Me&style=social)](https://github.com/ROGERS-4)
+[![GitHub Stars](https://img.shields.io/github/stars/ROGERS-4/nexora-md?label=Star%20Repo&style=social)](https://github.com/ROGERS-4/nexora-md)
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=00FF88&height=100&section=footer" width="100%"/>
+
+</div>
