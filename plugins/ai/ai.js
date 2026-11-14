@@ -1,16 +1,27 @@
-/**
- * NEXORA MD - AI Chat
- * Direct AI query — works anywhere, requires prefix
- * API: Omegatech
- * Usage:
- *   .ai <question>
- *   .ai (reply to a message)
- */
-
 const settings = require('../../settings');
 const axios = require('axios');
+const logger = require('../../lib/logger');
 
 const API_BASE = 'https://api.omegatech.xyz';
+
+// 🩺 SELF-HEALING MEMORY: Remembers failed APIs for 5 minutes
+const deadProviders = new Map();
+const DEAD_PROVIDER_TTL = 5 * 60 * 1000;
+
+function isProviderDead(name) {
+  const lastFail = deadProviders.get(name);
+  if (!lastFail) return false;
+  if (Date.now() - lastFail > DEAD_PROVIDER_TTL) {
+    deadProviders.delete(name);
+    return false;
+  }
+  return true;
+}
+
+function markProviderDead(name, reason) {
+  deadProviders.set(name, Date.now());
+  logger.warn(`🩺 [AI] Provider "${name}" marked DEAD for 5 mins. Reason: ${reason}`);
+}
 
 module.exports = {
   name: 'ai',
@@ -22,22 +33,13 @@ module.exports = {
 
   async execute(conn, mek, args, chatId, isOwner) {
     try {
-      // ─────────────────────────────────────────
-      // 1. Get question from args or replied message
-      // ─────────────────────────────────────────
       let question = args.join(' ').trim();
 
       if (!question) {
         const contextInfo = mek.message?.extendedTextMessage?.contextInfo;
         const quoted = contextInfo?.quotedMessage;
-
         if (quoted) {
-          const text =
-            quoted.conversation ||
-            quoted.extendedTextMessage?.text ||
-            quoted.imageMessage?.caption ||
-            quoted.videoMessage?.caption ||
-            '';
+          const text = quoted.conversation || quoted.extendedTextMessage?.text || quoted.imageMessage?.caption || quoted.videoMessage?.caption || '';
           if (text) question = text.trim();
         }
       }
@@ -45,137 +47,79 @@ module.exports = {
       if (!question) {
         await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
         await conn.sendMessage(chatId, {
-          text:
-            `AI Chat\n\n` +
-            `Usage:\n` +
-            `  ${settings.prefix || '.'}ai <question>\n` +
-            `  Reply to a message with ${settings.prefix || '.'}ai\n\n` +
-            `Examples:\n` +
-            `  ${settings.prefix || '.'}ai What is quantum physics?\n` +
-            `  ${settings.prefix || '.'}ai Write a short poem about rain\n\n` +
-            `${settings.footer}`
+          text: `🤖 *AI CHAT*\n\nUsage:\n  ${settings.prefix || '.'}ai <question>\n  Reply to a message with ${settings.prefix || '.'}ai\n\nExamples:\n  ${settings.prefix || '.'}ai What is quantum physics?\n  ${settings.prefix || '.'}ai Write a short poem about rain\n\n${settings.footer}`
         });
         return;
       }
 
-      // ─────────────────────────────────────────
-      // 2. React and notify
-      // ─────────────────────────────────────────
       await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-      await conn.sendMessage(chatId, { text: `Thinking...` });
+      await conn.sendMessage(chatId, { text: `🤖 _Thinking..._` });
 
-      // ─────────────────────────────────────────
-      // 3. Build session ID (persistent per user)
-      // ─────────────────────────────────────────
       const sender = mek.key.participant || mek.key.remoteJid;
       const senderNum = sender.split('@')[0].split(':')[0];
       const sessionId = 'nexora_' + senderNum;
       const pushName = mek.pushName || 'User';
 
-      // ─────────────────────────────────────────
-      // 4. Call Omegatech API
-      // ─────────────────────────────────────────
       let reply = null;
-      let lastError = null;
 
-      // Try POST first
-      try {
-        console.log('[AI] Trying: Omegatech POST');
-
-        const res = await axios.post(`${API_BASE}/ai/chat`, {
-          message: question,
-          sessionId,
-          name: pushName
-        }, {
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-          },
-          timeout: 45000
-        });
-
-        const data = res.data;
-        const candidate = data?.reply || data?.response || data?.message;
-
-        if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) {
-          // Avoid returning echoed input
-          if (candidate.trim() !== question.trim() || data?.success === true) {
-            reply = candidate.trim();
-            console.log('[AI] Success: Omegatech POST');
-          }
+      // 🩺 TIER 1: Omegatech POST (Skipped if dead)
+      if (!reply && !isProviderDead('omegatech_post')) {
+        try {
+          const res = await axios.post(`${API_BASE}/ai/chat`, { message: question, sessionId, name: pushName }, {
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            timeout: 20000
+          });
+          const candidate = res.data?.reply || res.data?.response || res.data?.message;
+          if (candidate && candidate.trim().length > 0) reply = candidate.trim();
+          else markProviderDead('omegatech_post', 'Empty Response');
+        } catch (e) {
+          markProviderDead('omegatech_post', e.message);
         }
-      } catch (e) {
-        lastError = e.message;
-        console.log('[AI] Omegatech POST failed:', e.message);
       }
 
-      // Try GET fallback
-      if (!reply) {
+      // 🩺 TIER 2: Omegatech GET (Skipped if dead)
+      if (!reply && !isProviderDead('omegatech_get')) {
         try {
-          console.log('[AI] Trying: Omegatech GET');
-
           const res = await axios.get(`${API_BASE}/ai/chat`, {
             params: { message: question, sessionId, name: pushName },
-            timeout: 45000
+            timeout: 20000
           });
-
-          const data = res.data;
-          const candidate = data?.reply || data?.response || data?.message;
-
-          if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) {
-            reply = candidate.trim();
-            console.log('[AI] Success: Omegatech GET');
-          }
+          const candidate = res.data?.reply || res.data?.response || res.data?.message;
+          if (candidate && candidate.trim().length > 0) reply = candidate.trim();
+          else markProviderDead('omegatech_get', 'Empty Response');
         } catch (e) {
-          lastError = e.message;
-          console.log('[AI] Omegatech GET failed:', e.message);
+          markProviderDead('omegatech_get', e.message);
         }
       }
 
-      // Fallback: Pollinations
-      if (!reply) {
+      // 🩺 TIER 3: Pollinations (Skipped if dead)
+      if (!reply && !isProviderDead('pollinations')) {
         try {
-          console.log('[AI] Fallback: pollinations');
-
           const res = await axios.post('https://text.pollinations.ai/openai', {
             model: 'openai',
             messages: [
-              { role: 'system', content: 'You are NEXORA, a helpful WhatsApp AI assistant. Reply naturally.' },
+              { role: 'system', content: 'You are NEXORA, a helpful WhatsApp AI assistant.' },
               { role: 'user', content: question }
             ]
-          }, {
-            headers: { 'Content-Type': 'application/json' },
-            timeout: 45000
-          });
-
-          const candidate = res.data?.choices?.[0]?.message?.content ||
-                            (typeof res.data === 'string' ? res.data : null);
-
-          if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) {
-            reply = candidate.trim();
-            console.log('[AI] Success: pollinations');
-          }
+          }, { headers: { 'Content-Type': 'application/json' }, timeout: 25000 });
+          const candidate = res.data?.choices?.[0]?.message?.content || (typeof res.data === 'string' ? res.data : null);
+          if (candidate && candidate.trim().length > 0) reply = candidate.trim();
+          else markProviderDead('pollinations', 'Empty Response');
         } catch (e) {
-          lastError = e.message;
-          console.log('[AI] Pollinations failed:', e.message);
+          markProviderDead('pollinations', e.message);
         }
       }
 
-      // ─────────────────────────────────────────
-      // 5. Send reply
-      // ─────────────────────────────────────────
       if (!reply) {
-        console.log('[AI] All endpoints failed. Last error:', lastError);
         await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
         await conn.sendMessage(chatId, {
-          text: `AI is currently unavailable. Try again later.\n\n${settings.footer}`
+          text: `❌ *AI is currently unavailable.*\n\nAll servers are down. The bot will auto-recover when they are back online.\n\n${settings.footer}`
         });
         return;
       }
 
       reply = reply.replace(/\*\*/g, '*').trim();
 
-      // Split long replies
       const MAX_LEN = 4000;
       if (reply.length > MAX_LEN) {
         const chunks = [];
@@ -183,7 +127,7 @@ module.exports = {
           chunks.push(reply.slice(i, i + MAX_LEN));
         }
         for (let i = 0; i < chunks.length; i++) {
-          const label = chunks.length > 1 ? `\n\n(Part ${i + 1}/${chunks.length})` : '';
+          const label = chunks.length > 1 ? `\n\n_(Part ${i + 1}/${chunks.length})_` : '';
           await conn.sendMessage(chatId, { text: chunks[i] + label });
           await new Promise(r => setTimeout(r, 500));
         }
@@ -191,16 +135,11 @@ module.exports = {
         await conn.sendMessage(chatId, { text: reply });
       }
 
-      console.log('[AI] Replied to', senderNum);
+      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
     } catch (error) {
-      console.log('[AI] Error:', error.message);
+      logger.error(`[AI] Error: ${error.message}`);
       try { await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } }); } catch (e) {}
-      try {
-        await conn.sendMessage(chatId, {
-          text: `Error: ${error.message}\n\n${settings.footer}`
-        });
-      } catch (e) {}
     }
   }
 };
