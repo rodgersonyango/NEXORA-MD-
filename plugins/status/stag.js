@@ -6,13 +6,12 @@ module.exports = {
     name: 'stag',
     aliases: ['withtag', 'postwith'],
     category: 'status',
-    description: 'Post a status with "With" tag using plain numbers',
+    description: 'Post a status and silently tag numbers with a clean layout',
     usage: '.stag <text> 254xxxx, 254xxxx (Reply to image/video)',
     ownerOnly: true,
     react: '👥',
 
     async execute(conn, mek, args, chatId) {
-        // 1. Get the full input
         const fullInput = args.join(' ');
         if (!fullInput) {
             return conn.sendMessage(chatId, { 
@@ -20,76 +19,70 @@ module.exports = {
             }, { quoted: mek });
         }
 
-        // 2. Extract numbers (looks for anything with 9+ digits)
+        // 1. Extract numbers
         const numberRegex = /(\d{9,15})/g;
         const rawNumbers = fullInput.match(numberRegex) || [];
         
-        // Remove the numbers from the text to get the clean caption
+        // 2. Clean text
         let cleanText = fullInput.replace(numberRegex, '').replace(/,/g, '').trim();
         if (!cleanText) cleanText = '📌 Shared Status';
 
         if (rawNumbers.length === 0) {
             return conn.sendMessage(chatId, { 
-                text: `❌ No valid phone numbers detected. Make sure they have the country code.\n\n${settings.footer}` 
+                text: `❌ No valid phone numbers detected.\n\n${settings.footer}` 
             }, { quoted: mek });
         }
 
-        // Convert numbers to JIDs
         const mentionedJids = rawNumbers.map(num => num + '@s.whatsapp.net');
-
-        // 3. Check if the user is replying to an image or video
         const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-        const isImage = quoted?.imageMessage;
-        const isVideo = quoted?.videoMessage;
-
-        if (!isImage && !isVideo) {
+        
+        if (!quoted?.imageMessage && !quoted?.videoMessage) {
             return conn.sendMessage(chatId, { 
-                text: `❌ You must reply to an *Image* or *Video* to post a status.\n\n${settings.footer}` 
+                text: `❌ Reply to an *Image* or *Video*.\n\n${settings.footer}` 
             }, { quoted: mek });
         }
 
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `👥 *Creating "With" Status for ${mentionedJids.length} people...*` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `👥 *Formatting Tagged Status...*` }, { quoted: mek });
 
         try {
             const botJid = conn.user.id.split(':')[0] + '@s.whatsapp.net';
-            
-            // 4. Download the media
-            const mediaType = isImage ? 'image' : 'video';
-            const mediaMessage = isImage ? quoted.imageMessage : quoted.videoMessage;
-            
+
+            // 3. Format the caption to look like a "With" tag
+            let tagText = '';
+            if (rawNumbers.length === 1) {
+                tagText = `👤 With: @${rawNumbers[0]}`;
+            } else {
+                tagText = `👥 With: @${rawNumbers[0]} + ${rawNumbers.length - 1} other${rawNumbers.length > 2 ? 's' : ''}`;
+            }
+
+            const finalCaption = `${cleanText}\n\n${tagText}`;
+
+            // 4. Download & Upload media
             const buffer = await downloadMediaMessage(
                 { message: quoted, key: mek.key },
                 'buffer',
                 {},
                 { logger: console, reuploadRequest: conn.updateMediaMessage }
             );
-
             const upload = await conn.waUploadToServer(buffer, { fileEncSha256: null });
 
-            // 5. Build the "With Tag" context
-            const contextInfo = {
-                mentionedJid: mentionedJids,
-                groupMentions: mentionedJids.map(jid => ({
-                    groupJid: jid,
-                    groupSubject: 'With' 
-                }))
-            };
-
-            // 6. Build the status protocol
+            // 5. Build Status
             const mediaKeyObj = {
                 url: upload.url,
-                mimetype: isImage ? 'image/jpeg' : 'video/mp4',
+                mimetype: quoted.imageMessage ? 'image/jpeg' : 'video/mp4',
                 fileSha256: upload.fileSha256,
                 fileLength: upload.fileLength,
                 mediaKey: upload.mediaKey,
                 fileEncSha256: upload.fileEncSha256,
                 directPath: upload.directPath,
-                caption: cleanText,
-                contextInfo: contextInfo
+                caption: finalCaption,
+                contextInfo: {
+                    mentionedJid: mentionedJids // This silently tags them
+                }
             };
 
-            const statusMessage = isImage 
+            const statusMessage = quoted.imageMessage 
                 ? { imageMessage: mediaKeyObj } 
                 : { videoMessage: mediaKeyObj };
 
@@ -98,18 +91,14 @@ module.exports = {
                 messageId: '3EB0' + Math.random().toString(36).substring(2, 18).toUpperCase()
             });
 
-            // 7. Relay to WhatsApp
+            // 6. Post it
             await conn.relayMessage('status@broadcast', message.message, {
                 messageId: message.key.id,
                 statusJidList: [botJid, ...mentionedJids]
             });
 
-            // 8. Confirm
-            const count = mentionedJids.length;
-            const withText = `${count} other${count > 1 ? 's' : ''}`;
-
             await conn.sendMessage(chatId, { 
-                text: `✅ *With-Tag Status Posted!*\n\n👥 Header will show: *You + ${withText}*\n📝 Text: ${cleanText}\n\n_Check your status to see the Facebook-style tag._\n\n${settings.footer}`, 
+                text: `✅ *Tagged Status Posted!*\n\n📝 Caption:\n${finalCaption}\n\n${settings.footer}`, 
                 mentions: mentionedJids
             }, { quoted: mek });
             
