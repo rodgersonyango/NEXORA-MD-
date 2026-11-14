@@ -43,6 +43,7 @@ const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
   delay,
   jidNormalizedUser,
@@ -439,7 +440,15 @@ async function startNexora() {
     const sessionFolder = settings.sessionFolder || './data/session';
     if (!fs.existsSync(sessionFolder)) fs.mkdirSync(sessionFolder, { recursive: true });
 
-    let { version } = await fetchLatestBaileysVersion();
+    let version;
+    try {
+      const waVersion = await fetchLatestWaWebVersion();
+      version = waVersion.version;
+    } catch (e) {
+      const fallback = await fetchLatestBaileysVersion();
+      version = fallback.version;
+    }
+
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
     const msgRetryCounterCache = new NodeCache();
 
@@ -1394,7 +1403,7 @@ ${settings.footer}`;
             activeSock?.end?.(undefined);
           } catch (e) {}
           activeSock = null;
-          await delay(3000);
+          await delay(500);
           isReconnecting = false;
           startNexora();
         }
