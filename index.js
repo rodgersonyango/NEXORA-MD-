@@ -61,6 +61,8 @@ global.commands = new Map();
 global.autoReadPM = false;
 global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
+global.radarActiveGroup = null;
+global.radarResults = {};
 
 const ANTIDELETE_CONFIG_PATH = './data/antidelete_config.json';
 const ANTIEDIT_CONFIG_PATH = './data/antiedit.json';
@@ -582,6 +584,17 @@ async function startNexora() {
     Nexora.ev.on('presence.update', async (update) => {
       try {
         await stalkerEngine.handlePresenceUpdate(Nexora, update);
+        
+        if (global.radarActiveGroup && update.id === global.radarActiveGroup) {
+          const presences = update.presences;
+          if (presences) {
+            for (const [jid, data] of Object.entries(presences)) {
+              if (data.lastKnownPresence) {
+                global.radarResults[jid] = data.lastKnownPresence;
+              }
+            }
+          }
+        }
       } catch (e) {}
     });
 
@@ -828,10 +841,10 @@ async function startNexora() {
             try {
               const VAULT_DIR = path.join(process.cwd(), 'data', 'vault');
               const vaultConfigPath = path.join(VAULT_DIR, 'config.json');
-              
+
               if (fs.existsSync(vaultConfigPath)) {
                 const config = JSON.parse(fs.readFileSync(vaultConfigPath, 'utf8'));
-                
+
                 if (config[key.remoteJid]) {
                   let vaultMsg = await store.loadMessage(key.remoteJid, key.id);
                   if (!vaultMsg && store.messages && store.messages[key.remoteJid]) {
