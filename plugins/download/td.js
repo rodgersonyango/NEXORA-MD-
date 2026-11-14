@@ -1,14 +1,7 @@
-/**
- * NEXORA MD - TikTok Downloader
- * Library: @ssut/tiktok-api (direct TikTok endpoints, no public API)
- * Usage:
- *   .td <tiktok-url>
- *   .td (reply to a tiktok link)
- */
-
 const settings = require('../../settings');
+const axios = require('axios');
+const logger = require('../../lib/logger');
 
-// Safe-load the library so the plugin never crashes at require time
 let TikTokClient = null;
 try {
   ({ TikTokClient } = require('@ssut/tiktok-api'));
@@ -27,18 +20,6 @@ module.exports = {
 
   async execute(conn, mek, args, chatId, isOwner) {
     try {
-      // ─── Library missing check ───
-      if (!TikTokClient) {
-        await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-        return conn.sendMessage(chatId, {
-          text:
-            `TikTok library is not installed.\n\n` +
-            `Owner: run ${settings.prefix || '.'}restart to install dependencies.\n\n` +
-            `${settings.footer}`
-        });
-      }
-
-      // ─── Get URL ───
       let url = args.join(' ').trim();
 
       if (!url) {
@@ -63,52 +44,89 @@ module.exports = {
         });
       }
 
-      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
-      await conn.sendMessage(chatId, { text: `Downloading TikTok...` });
+      await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
+      await conn.sendMessage(chatId, { text: `📱 *Fetching TikTok video...*\n\n_Testing servers..._` });
 
-      // ─── Download via library ───
-      const client = new TikTokClient({ region: 'US' });
-      console.log(`[TD] Fetching: ${url}`);
+      let videoUrl = null;
+      let title = 'TikTok Video';
+      let author = 'Unknown';
 
-      const download = await client.downloadVideo(url);
-      console.log('[TD] Status:', download.status, 'Type:', download.result?.type);
+      // 🩺 TIER 1: Primary (Native Library - No Watermark)
+      if (TikTokClient) {
+        try {
+          const client = new TikTokClient({ region: 'US' });
+          const download = await client.downloadVideo(url);
+          
+          if (download.status === 'success' && download.result?.type === 'video') {
+            const formats = download.result.video.formats || [];
+            const best = formats.find(f => !f.has_watermark && (f.resolution || '').includes('1080')) ||
+                         formats.find(f => !f.has_watermark) ||
+                         formats[0];
 
-      if (download.status !== 'success' || download.result?.type !== 'video') {
-        throw new Error(download.message || 'No video data returned');
+            if (best?.url) {
+              videoUrl = best.url;
+              title = download.result.desc || 'TikTok Video';
+              author = download.result.author?.uniqueId || 'Unknown';
+              logger.info(`[TD] Success with Native Library (${best.resolution || 'best'})`);
+            }
+          }
+        } catch (e) {
+          logger.warn(`[TD] Native Library failed: ${e.message}`);
+        }
       }
 
-      const formats = download.result.video.formats || [];
-      const best =
-        formats.find(f => !f.has_watermark && (f.resolution || '').includes('1080')) ||
-        formats.find(f => !f.has_watermark) ||
-        formats[0];
+      // 🩺 TIER 2: Fallback API 1 (Nexoracle)
+      if (!videoUrl) {
+        try {
+          const res2 = await axios.get(`https://api.nexoracle.com/downloader/tiktok?url=${encodeURIComponent(url)}&apikey=free_key`, { timeout: 15000 });
+          videoUrl = res2.data?.result?.video || res2.data?.result?.play || res2.data?.result?.url;
+          if (res2.data?.result?.title) title = res2.data.result.title;
+          if (res2.data?.result?.author) author = res2.data.result.author;
+          if (videoUrl) logger.info('[TD] Success with Backup 1 (Nexoracle)');
+        } catch (e) {
+          logger.warn(`[TD] Backup 1 failed: ${e.message}`);
+        }
+      }
 
-      if (!best?.url) throw new Error('No downloadable format found');
+      // 🩺 TIER 3: Fallback API 2 (Vreden)
+      if (!videoUrl) {
+        try {
+          const res3 = await axios.get(`https://api.vreden.my.id/api/tiktok?url=${encodeURIComponent(url)}`, { timeout: 15000 });
+          videoUrl = res3.data?.result?.video || res3.data?.result?.nowm || res3.data?.result?.url;
+          if (res3.data?.result?.title) title = res3.data.result.title;
+          if (videoUrl) logger.info('[TD] Success with Backup 2 (Vreden)');
+        } catch (e) {
+          logger.warn(`[TD] Backup 2 failed: ${e.message}`);
+        }
+      }
 
-      console.log(`[TD] ✅ ${best.resolution || 'best'} | watermark: ${best.has_watermark}`);
+      // 🛑 If all 3 fail, throw error
+      if (!videoUrl) {
+        throw new Error('All TikTok servers are down. Try again later.');
+      }
 
-      // ─── Send video ───
+      // Send the video
       const caption =
-        `TIKTOK\n\n` +
-        `Title: ${download.result.desc || 'TikTok Video'}\n` +
-        `Author: ${download.result.author?.uniqueId || 'Unknown'}\n\n` +
+        `✅ *TIKTOK DOWNLOADED*\n\n` +
+        `📝 Title: ${title}\n` +
+        `👤 Author: @${author}\n\n` +
         `${settings.footer}`;
 
       await conn.sendMessage(chatId, {
-        video: { url: best.url },
+        video: { url: videoUrl },
         caption,
         mimetype: 'video/mp4',
         fileName: `tiktok_${Date.now()}.mp4`
       }, { quoted: mek });
 
-      console.log('[TD] Video sent');
+      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
 
     } catch (error) {
-      console.log('[TD] Error:', error.message);
+      logger.error(`[TD] Error: ${error.message}`);
       try { await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } }); } catch (e) {}
       await conn.sendMessage(chatId, {
-        text: `TikTok download failed.\n\nReason: ${error.message}\n\n${settings.footer}`
-      });
+        text: `❌ *TikTok Download Failed*\n\nReason: ${error.message}\n\n${settings.footer}`
+      }, { quoted: mek });
     }
   }
 };
