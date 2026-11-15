@@ -13,26 +13,28 @@ module.exports = {
 
     async execute(conn, mek, args, chatId) {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_Syncing your phonebook from WhatsApp servers. This may take a moment..._` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_Syncing phonebook..._` }, { quoted: mek });
 
         try {
-            // 🔥 THE FORCE HACK: Pull ALL contacts directly from WhatsApp
-            // Instead of relying on empty store.contacts, we ask WhatsApp for the full list
-            const contacts = await conn.onWhatsApp();
+            // 🔥 THE FIX: Force the bot to resync your contacts with WhatsApp
+            // This tells WhatsApp "Send me all my contacts now"
+            await conn.resyncAppState(['critical_unblock_low', 'regular_low'], false).catch(() => {});
             
-            if (!contacts || contacts.length === 0) {
+            // Wait 5 seconds for the sync to finish
+            await new Promise(r => setTimeout(r, 5000));
+
+            // Now check the store again
+            const contacts = Object.keys(store.contacts || {});
+            const targetJids = contacts.filter(jid => jid.endsWith('@s.whatsapp.net'));
+
+            if (targetJids.length === 0) {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *No contacts returned from WhatsApp.*\n\nThis usually means the bot's session is still syncing. Wait 2 minutes and try again.\n\n${settings.footer}` 
+                    text: `❌ *Still no contacts in store.*\n\nThis means your bot's session doesn't have phonebook permission. You need to open WhatsApp on the bot's phone and manually sync contacts once.\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
-            // Filter only valid @s.whatsapp.net contacts
-            const targetJids = contacts
-                .filter(c => c.exists && c.jid && c.jid.endsWith('@s.whatsapp.net'))
-                .map(c => c.jid);
-
             await conn.sendMessage(chatId, { 
-                text: `👁️ _Found ${targetJids.length} contacts on WhatsApp. Starting scan..._` 
+                text: `👁️ _Synced ${targetJids.length} contacts. Starting scan..._` 
             });
 
             const emojis = Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0 
@@ -43,7 +45,6 @@ module.exports = {
             let reactedCount = 0;
             let checkedCount = 0;
 
-            // Loop through EVERY contact
             for (const jid of targetJids) {
                 checkedCount++;
                 
@@ -54,17 +55,14 @@ module.exports = {
                 }
 
                 try {
-                    // 🔥 FORCE FETCH: Check if they have a status
                     const statuses = await conn.fetchStatus(jid);
                     
                     if (statuses && statuses.length > 0) {
                         for (const status of statuses) {
                             try {
-                                // 1. View
                                 await conn.readMessages([status.key]);
                                 viewedCount++;
 
-                                // 2. React
                                 const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
                                 await conn.relayMessage('status@broadcast', {
                                     reactionMessage: {
@@ -82,11 +80,8 @@ module.exports = {
                             } catch (e) {}
                         }
                     }
-                } catch (e) {
-                    // Ignore privacy blocks
-                }
+                } catch (e) {}
                 
-                // Tiny delay to avoid rate-limit ban
                 await new Promise(r => setTimeout(r, 150));
             }
 
