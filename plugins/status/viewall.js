@@ -13,49 +13,26 @@ module.exports = {
 
     async execute(conn, mek, args, chatId) {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_Gathering contacts from recent chats..._` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_Syncing your phonebook from WhatsApp servers. This may take a moment..._` }, { quoted: mek });
 
         try {
-            // 🔥 THE FIX: We gather JIDs from the store.messages (recent chats) 
-            // instead of relying on store.contacts which takes time to sync.
-            const jidSet = new Set();
-
-            // 1. Get JIDs from recent messages
-            if (store.messages) {
-                for (const chatId of Object.keys(store.messages)) {
-                    if (chatId.endsWith('@s.whatsapp.net')) {
-                        jidSet.add(chatId);
-                    } else if (chatId.endsWith('@g.us')) {
-                        // If it's a group, pull the participants from the group metadata
-                        try {
-                            const meta = await conn.groupMetadata(chatId);
-                            for (const p of meta.participants) {
-                                if (p.id.endsWith('@s.whatsapp.net')) {
-                                    jidSet.add(p.id);
-                                }
-                            }
-                        } catch (e) {}
-                    }
-                }
-            }
-
-            // 2. Also add anyone in the contacts store (if any synced)
-            if (store.contacts) {
-                for (const jid of Object.keys(store.contacts)) {
-                    if (jid.endsWith('@s.whatsapp.net')) jidSet.add(jid);
-                }
-            }
-
-            const targetJids = Array.from(jidSet);
-
-            if (targetJids.length === 0) {
+            // 🔥 THE FORCE HACK: Pull ALL contacts directly from WhatsApp
+            // Instead of relying on empty store.contacts, we ask WhatsApp for the full list
+            const contacts = await conn.onWhatsApp();
+            
+            if (!contacts || contacts.length === 0) {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *No recent contacts found.*\n\nSend a message to someone or open a group, then try again in 1 minute.\n\n${settings.footer}` 
+                    text: `❌ *No contacts returned from WhatsApp.*\n\nThis usually means the bot's session is still syncing. Wait 2 minutes and try again.\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
+            // Filter only valid @s.whatsapp.net contacts
+            const targetJids = contacts
+                .filter(c => c.exists && c.jid && c.jid.endsWith('@s.whatsapp.net'))
+                .map(c => c.jid);
+
             await conn.sendMessage(chatId, { 
-                text: `👁️ _Found ${targetJids.length} contacts. Starting force-fetch..._` 
+                text: `👁️ _Found ${targetJids.length} contacts on WhatsApp. Starting scan..._` 
             });
 
             const emojis = Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0 
@@ -66,28 +43,28 @@ module.exports = {
             let reactedCount = 0;
             let checkedCount = 0;
 
-            // 3. Loop through contacts and force fetch status
+            // Loop through EVERY contact
             for (const jid of targetJids) {
                 checkedCount++;
                 
-                if (checkedCount % 20 === 0) {
+                if (checkedCount % 50 === 0) {
                     await conn.sendMessage(chatId, { 
-                        text: `👁️ _Scanned ${checkedCount}/${targetJids.length} contacts... (Viewed: ${viewedCount})_` 
+                        text: `👁️ _Scanned ${checkedCount}/${targetJids.length}... (Viewed: ${viewedCount})_` 
                     });
                 }
 
                 try {
-                    // 🔥 FORCE FETCH
+                    // 🔥 FORCE FETCH: Check if they have a status
                     const statuses = await conn.fetchStatus(jid);
                     
                     if (statuses && statuses.length > 0) {
                         for (const status of statuses) {
                             try {
-                                // Mark viewed
+                                // 1. View
                                 await conn.readMessages([status.key]);
                                 viewedCount++;
 
-                                // React
+                                // 2. React
                                 const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
                                 await conn.relayMessage('status@broadcast', {
                                     reactionMessage: {
@@ -101,7 +78,7 @@ module.exports = {
                                 });
                                 reactedCount++;
 
-                                await new Promise(r => setTimeout(r, 500)); 
+                                await new Promise(r => setTimeout(r, 500));
                             } catch (e) {}
                         }
                     }
@@ -109,13 +86,13 @@ module.exports = {
                     // Ignore privacy blocks
                 }
                 
-                // Tiny delay between contacts to prevent rate-limit ban
-                await new Promise(r => setTimeout(r, 100));
+                // Tiny delay to avoid rate-limit ban
+                await new Promise(r => setTimeout(r, 150));
             }
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `✅ *FORCE VIEW COMPLETE*\n\n👁️ Scanned: ${checkedCount} contacts\n👁️ Statuses Viewed: ${viewedCount}\n💥 Reactions Sent: ${reactedCount}\n\n${settings.footer}` 
+                text: `✅ *FORCE VIEW COMPLETE*\n\n📇 Contacts Scanned: ${checkedCount}\n👁️ Statuses Viewed: ${viewedCount}\n💥 Reactions Sent: ${reactedCount}\n\n${settings.footer}` 
             }, { quoted: mek });
 
         } catch (error) {
