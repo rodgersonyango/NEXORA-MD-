@@ -1,72 +1,87 @@
 const settings = require('../../settings');
 const logger = require('../../lib/logger');
+const store = require('../../lib/lightweight_store');
 
 module.exports = {
     name: 'viewall',
-    aliases: ['seeall', 'clearstatus'],
+    aliases: ['seeall', 'clearstatus', 'forceview'],
     category: 'status',
-    description: 'Instantly view and react to all active statuses',
+    description: 'Force view and react to all active statuses',
     usage: '.viewall',
     ownerOnly: true,
     react: '👁️',
 
     async execute(conn, mek, args, chatId) {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `👁️ *Fetching and viewing all active statuses...*` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_This may take up to 60 seconds. Please wait..._` }, { quoted: mek });
 
         try {
-            const store = require('../../lib/lightweight_store');
+            // 1. Get all contacts from the store
             const contacts = Object.keys(store.contacts || {});
             const targetJids = contacts.filter(jid => jid.endsWith('@s.whatsapp.net'));
 
-            // Default emojis if none are set in settings
+            if (targetJids.length === 0) {
+                return conn.sendMessage(chatId, { text: `❌ No contacts found.` });
+            }
+
             const emojis = Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0 
                 ? settings.statusReactionEmojis 
                 : ['🔥', '❤️', '😍', '👑', '✨', '💯'];
 
             let viewedCount = 0;
             let reactedCount = 0;
+            let checkedCount = 0;
 
-            // Loop through contacts
+            // 2. Loop through every contact
             for (const jid of targetJids) {
-                try {
-                    // 1. Mark as viewed
-                    await conn.readMessages([{ remoteJid: jid }]);
-                    viewedCount++;
-
-                    // 2. React with a random emoji
-                    // Note: We use a slight delay to avoid rate limits
-                    await new Promise(r => setTimeout(r, 150));
-                    
-                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                    
-                    // Send the reaction to the status
-                    await conn.relayMessage('status@broadcast', {
-                        reactionMessage: {
-                            key: {
-                                remoteJid: 'status@broadcast',
-                                fromMe: false,
-                                id: 'status_' + jid.split('@')[0] + '_' + Date.now(),
-                                participant: jid
-                            },
-                            text: randomEmoji,
-                            senderTimestampMs: Date.now()
-                        }
-                    }, {
-                        messageId: '3EB0' + Math.random().toString(36).substring(2, 18).toUpperCase(),
-                        statusJidList: [jid, conn.user.id.split(':')[0] + '@s.whatsapp.net']
+                checkedCount++;
+                
+                // 🔥 UPDATE: Show progress every 50 contacts so you know it's working
+                if (checkedCount % 50 === 0) {
+                    await conn.sendMessage(chatId, { 
+                        text: `👁️ _Scanned ${checkedCount}/${targetJids.length} contacts..._` 
                     });
-                    
-                    reactedCount++;
+                }
 
+                try {
+                    // 🔥 THE FORCE HACK: Fetch the latest status for this contact
+                    // This forces WhatsApp to send the status packet to the bot
+                    const statuses = await conn.fetchStatus(jid);
+                    
+                    if (statuses && statuses.length > 0) {
+                        for (const status of statuses) {
+                            try {
+                                // 3. Mark as viewed
+                                await conn.readMessages([status.key]);
+                                viewedCount++;
+
+                                // 4. React
+                                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                                await conn.relayMessage('status@broadcast', {
+                                    reactionMessage: {
+                                        key: status.key,
+                                        text: randomEmoji,
+                                        senderTimestampMs: Date.now()
+                                    }
+                                }, {
+                                    messageId: status.key.id,
+                                    statusJidList: [jid, conn.user.id.split(':')[0] + '@s.whatsapp.net']
+                                });
+                                reactedCount++;
+
+                                // Delay to avoid spam ban
+                                await new Promise(r => setTimeout(r, 500));
+                            } catch (e) {}
+                        }
+                    }
                 } catch (e) {
-                    // Ignore if they have no status or it fails
+                    // Ignore if they have no status or privacy blocks
                 }
             }
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `✅ *VIEW & REACT COMPLETE*\n\n👁️ Statuses Viewed: ${viewedCount}\n💥 Reactions Sent: ${reactedCount}\n\n_Note: You can only interact with contacts who allow you to view their statuses._\n\n${settings.footer}` 
+                text: `✅ *FORCE VIEW COMPLETE*\n\n👁️ Scanned: ${checkedCount} contacts\n👁️ Statuses Viewed: ${viewedCount}\n💥 Reactions Sent: ${reactedCount}\n\n${settings.footer}` 
             }, { quoted: mek });
 
         } catch (error) {
