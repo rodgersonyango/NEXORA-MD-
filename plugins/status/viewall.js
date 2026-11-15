@@ -6,35 +6,60 @@ module.exports = {
     name: 'viewall',
     aliases: ['seeall', 'clearstatus', 'forceview'],
     category: 'status',
-    description: 'Force view and react to all active statuses',
+    description: 'Autosync all possible contacts and view statuses',
     usage: '.viewall',
     ownerOnly: true,
     react: '👁️',
 
     async execute(conn, mek, args, chatId) {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_Syncing phonebook..._` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `👁️ *AUTOSYNCING...*\n\n_Pulling contacts from chats, groups, and cache..._` }, { quoted: mek });
 
         try {
-            // 🔥 THE FIX: Force the bot to resync your contacts with WhatsApp
-            // This tells WhatsApp "Send me all my contacts now"
-            await conn.resyncAppState(['critical_unblock_low', 'regular_low'], false).catch(() => {});
-            
-            // Wait 5 seconds for the sync to finish
-            await new Promise(r => setTimeout(r, 5000));
+            let contactJids = new Set();
 
-            // Now check the store again
-            const contacts = Object.keys(store.contacts || {});
-            const targetJids = contacts.filter(jid => jid.endsWith('@s.whatsapp.net'));
+            // 1. Get from recent chats
+            if (store.messages) {
+                for (const chatId of Object.keys(store.messages)) {
+                    if (chatId.endsWith('@s.whatsapp.net')) {
+                        contactJids.add(chatId);
+                    }
+                }
+            }
+
+            // 2. Get from contacts store
+            if (store.contacts) {
+                for (const jid of Object.keys(store.contacts)) {
+                    if (jid.endsWith('@s.whatsapp.net')) contactJids.add(jid);
+                }
+            }
+
+            // 3. 🔥 FORCE FETCH ALL GROUPS (This is the magic)
+            await conn.sendMessage(chatId, { text: `📡 _Fetching groups from server..._` });
+            try {
+                const groups = await conn.groupFetchAllParticipating();
+                for (const groupId of Object.keys(groups)) {
+                    const group = groups[groupId];
+                    if (group.participants) {
+                        for (const p of group.participants) {
+                            if (p.id.endsWith('@s.whatsapp.net')) contactJids.add(p.id);
+                        }
+                    }
+                }
+            } catch (e) {
+                logger.warn(`[VIEWALL] Group fetch failed: ${e.message}`);
+            }
+
+            const targetJids = Array.from(contactJids);
 
             if (targetJids.length === 0) {
                 return conn.sendMessage(chatId, { 
-                    text: `❌ *Still no contacts in store.*\n\nThis means your bot's session doesn't have phonebook permission. You need to open WhatsApp on the bot's phone and manually sync contacts once.\n\n${settings.footer}` 
+                    text: `❌ *No contacts found.*\n\nYou must be in at least 1 WhatsApp group or have recent chats for the bot to sync.\n\n${settings.footer}` 
                 }, { quoted: mek });
             }
 
             await conn.sendMessage(chatId, { 
-                text: `👁️ _Synced ${targetJids.length} contacts. Starting scan..._` 
+                text: `✅ _Synced ${targetJids.length} contacts. Starting scan..._` 
             });
 
             const emojis = Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0 
@@ -48,7 +73,7 @@ module.exports = {
             for (const jid of targetJids) {
                 checkedCount++;
                 
-                if (checkedCount % 50 === 0) {
+                if (checkedCount % 20 === 0) {
                     await conn.sendMessage(chatId, { 
                         text: `👁️ _Scanned ${checkedCount}/${targetJids.length}... (Viewed: ${viewedCount})_` 
                     });
@@ -82,12 +107,12 @@ module.exports = {
                     }
                 } catch (e) {}
                 
-                await new Promise(r => setTimeout(r, 150));
+                await new Promise(r => setTimeout(r, 100));
             }
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
             await conn.sendMessage(chatId, { 
-                text: `✅ *FORCE VIEW COMPLETE*\n\n📇 Contacts Scanned: ${checkedCount}\n👁️ Statuses Viewed: ${viewedCount}\n💥 Reactions Sent: ${reactedCount}\n\n${settings.footer}` 
+                text: `✅ *VIEWALL COMPLETE*\n\n📇 Contacts Found: ${targetJids.length}\n👁️ Statuses Viewed: ${viewedCount}\n💥 Reactions Sent: ${reactedCount}\n\n${settings.footer}` 
             }, { quoted: mek });
 
         } catch (error) {
