@@ -13,16 +13,50 @@ module.exports = {
 
     async execute(conn, mek, args, chatId) {
         await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
-        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_This may take up to 60 seconds. Please wait..._` }, { quoted: mek });
+        await conn.sendMessage(chatId, { text: `👁️ *FORCING STATUS FETCH...*\n\n_Gathering contacts from recent chats..._` }, { quoted: mek });
 
         try {
-            // 1. Get all contacts from the store
-            const contacts = Object.keys(store.contacts || {});
-            const targetJids = contacts.filter(jid => jid.endsWith('@s.whatsapp.net'));
+            // 🔥 THE FIX: We gather JIDs from the store.messages (recent chats) 
+            // instead of relying on store.contacts which takes time to sync.
+            const jidSet = new Set();
+
+            // 1. Get JIDs from recent messages
+            if (store.messages) {
+                for (const chatId of Object.keys(store.messages)) {
+                    if (chatId.endsWith('@s.whatsapp.net')) {
+                        jidSet.add(chatId);
+                    } else if (chatId.endsWith('@g.us')) {
+                        // If it's a group, pull the participants from the group metadata
+                        try {
+                            const meta = await conn.groupMetadata(chatId);
+                            for (const p of meta.participants) {
+                                if (p.id.endsWith('@s.whatsapp.net')) {
+                                    jidSet.add(p.id);
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                }
+            }
+
+            // 2. Also add anyone in the contacts store (if any synced)
+            if (store.contacts) {
+                for (const jid of Object.keys(store.contacts)) {
+                    if (jid.endsWith('@s.whatsapp.net')) jidSet.add(jid);
+                }
+            }
+
+            const targetJids = Array.from(jidSet);
 
             if (targetJids.length === 0) {
-                return conn.sendMessage(chatId, { text: `❌ No contacts found.` });
+                return conn.sendMessage(chatId, { 
+                    text: `❌ *No recent contacts found.*\n\nSend a message to someone or open a group, then try again in 1 minute.\n\n${settings.footer}` 
+                }, { quoted: mek });
             }
+
+            await conn.sendMessage(chatId, { 
+                text: `👁️ _Found ${targetJids.length} contacts. Starting force-fetch..._` 
+            });
 
             const emojis = Array.isArray(settings.statusReactionEmojis) && settings.statusReactionEmojis.length > 0 
                 ? settings.statusReactionEmojis 
@@ -32,30 +66,28 @@ module.exports = {
             let reactedCount = 0;
             let checkedCount = 0;
 
-            // 2. Loop through every contact
+            // 3. Loop through contacts and force fetch status
             for (const jid of targetJids) {
                 checkedCount++;
                 
-                // 🔥 UPDATE: Show progress every 50 contacts so you know it's working
-                if (checkedCount % 50 === 0) {
+                if (checkedCount % 20 === 0) {
                     await conn.sendMessage(chatId, { 
-                        text: `👁️ _Scanned ${checkedCount}/${targetJids.length} contacts..._` 
+                        text: `👁️ _Scanned ${checkedCount}/${targetJids.length} contacts... (Viewed: ${viewedCount})_` 
                     });
                 }
 
                 try {
-                    // 🔥 THE FORCE HACK: Fetch the latest status for this contact
-                    // This forces WhatsApp to send the status packet to the bot
+                    // 🔥 FORCE FETCH
                     const statuses = await conn.fetchStatus(jid);
                     
                     if (statuses && statuses.length > 0) {
                         for (const status of statuses) {
                             try {
-                                // 3. Mark as viewed
+                                // Mark viewed
                                 await conn.readMessages([status.key]);
                                 viewedCount++;
 
-                                // 4. React
+                                // React
                                 const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
                                 await conn.relayMessage('status@broadcast', {
                                     reactionMessage: {
@@ -69,14 +101,16 @@ module.exports = {
                                 });
                                 reactedCount++;
 
-                                // Delay to avoid spam ban
-                                await new Promise(r => setTimeout(r, 500));
+                                await new Promise(r => setTimeout(r, 500)); 
                             } catch (e) {}
                         }
                     }
                 } catch (e) {
-                    // Ignore if they have no status or privacy blocks
+                    // Ignore privacy blocks
                 }
+                
+                // Tiny delay between contacts to prevent rate-limit ban
+                await new Promise(r => setTimeout(r, 100));
             }
 
             await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
