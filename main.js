@@ -249,6 +249,39 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
       ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
       : (mek.key.participant || mek.key.remoteJid);
 
+    // 🕵️‍♂️ AI AGENT CHECK (Intercept messages from agent targets)
+    try {
+        const AGENT_FILE = path.join(process.cwd(), 'data', 'active_agents.json');
+        if (fs.existsSync(AGENT_FILE)) {
+            const agents = JSON.parse(fs.readFileSync(AGENT_FILE, 'utf8'));
+            
+            // If this sender is an active AI agent target and it's a DM
+            if (agents[sender] && !mek.key.fromMe && !chatId.endsWith('@g.us')) {
+                const text = extractText(mek.message);
+                
+                if (text) {
+                    try { await conn.sendPresenceUpdate('composing', chatId); } catch (e) {}
+
+                    let aiReply = "I'm sorry, I didn't understand that.";
+                    try {
+                        const res = await axios.post('https://api.omegatech.xyz/ai/chat', {
+                            message: text,
+                            sessionId: 'agent_' + sender,
+                            name: 'AI Agent'
+                        }, { timeout: 20000 });
+
+                        if (res.data?.reply) aiReply = res.data.reply;
+                    } catch (e) {
+                        logger.warn(`[AGENT] AI failed: ${e.message}`);
+                    }
+
+                    await conn.sendMessage(chatId, { text: aiReply });
+                }
+                return; // 🛑 Stop processing further (don't trigger commands)
+            }
+        }
+    } catch (e) {}
+
     if (chatId.endsWith('@g.us')) {
       try {
         const banned = getBannedGroups();
