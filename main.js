@@ -255,8 +255,11 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
         if (fs.existsSync(AGENT_FILE)) {
             const agents = JSON.parse(fs.readFileSync(AGENT_FILE, 'utf8'));
             
+            // 🔥 FIX: Extract the pure number from the JID (e.g., 254xxx@s.whatsapp.net -> 254xxx)
+            const senderNum = sender.split('@')[0].split(':')[0];
+            
             // If this sender is an active AI agent target and it's a DM
-            if (agents[sender] && !mek.key.fromMe && !chatId.endsWith('@g.us')) {
+            if (agents[senderNum] && !mek.key.fromMe && !chatId.endsWith('@g.us')) {
                 const text = extractText(mek.message);
                 
                 if (text) {
@@ -266,7 +269,7 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
                     try {
                         const res = await axios.post('https://api.omegatech.xyz/ai/chat', {
                             message: text,
-                            sessionId: 'agent_' + sender,
+                            sessionId: 'agent_' + senderNum,
                             name: 'AI Agent'
                         }, { timeout: 20000 });
 
@@ -275,9 +278,10 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
                         logger.warn(`[AGENT] AI failed: ${e.message}`);
                     }
 
+                    // Send AI reply back
                     await conn.sendMessage(chatId, { text: aiReply });
                 }
-                return; // 🛑 Stop processing further (don't trigger commands)
+                return; // 🛑 Stop processing further
             }
         }
     } catch (e) {}
