@@ -10,9 +10,27 @@ const logger = require('./lib/logger');
 
 const cleanNumber = owner.cleanNumber;
 
+// 🩺 SELF-HEALING AI MEMORY
+const deadProviders = new Map();
+const DEAD_PROVIDER_TTL = 5 * 60 * 1000;
+
+function isProviderDead(name) {
+  const lastFail = deadProviders.get(name);
+  if (!lastFail) return false;
+  if (Date.now() - lastFail > DEAD_PROVIDER_TTL) {
+    deadProviders.delete(name);
+    return false;
+  }
+  return true;
+}
+
+function markProviderDead(name, reason) {
+  deadProviders.set(name, Date.now());
+  logger.warn(`🩺 [AI] Provider "${name}" marked DEAD for 5 mins. Reason: ${reason}`);
+}
+
 function isEmojiCommand(text) {
   if (!text || text.length === 0) return false;
-
   if (typeof Intl !== 'undefined' && Intl.Segmenter) {
     try {
       const seg = new Intl.Segmenter('en', { granularity: 'grapheme' });
@@ -22,7 +40,6 @@ function isEmojiCommand(text) {
       return graphemes.every(g => singleEmoji.test(g));
     } catch (e) {}
   }
-
   const emojiRegex = /^[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{1F1E6}-\u{1F1FF}\u{2190}-\u{21FF}\u{2B00}-\u{2BFF}\u{FE00}-\u{FE0F}\u{200D}\u{20E3}\u{1F3FB}-\u{1F3FF}]+$/u;
   return emojiRegex.test(text);
 }
@@ -35,19 +52,12 @@ function getBotOwnerNumber() {
 
 function extractMedia(quoted) {
   if (!quoted) return null;
-
   let inner = quoted;
   for (let i = 0; i < 4; i++) {
-    const wrapper =
-      inner.viewOnceMessageV2?.message ||
-      inner.viewOnceMessage?.message ||
-      inner.viewOnceMessageV2Extension?.message ||
-      inner.documentWithCaptionMessage?.message ||
-      inner.ephemeralMessage?.message;
+    const wrapper = inner.viewOnceMessageV2?.message || inner.viewOnceMessage?.message || inner.viewOnceMessageV2Extension?.message || inner.documentWithCaptionMessage?.message || inner.ephemeralMessage?.message;
     if (wrapper) inner = wrapper;
     else break;
   }
-
   if (inner.imageMessage) return { type: 'image', media: inner.imageMessage, caption: inner.imageMessage.caption || '' };
   if (inner.videoMessage) return { type: 'video', media: inner.videoMessage, caption: inner.videoMessage.caption || '' };
   if (inner.audioMessage) return { type: 'audio', media: inner.audioMessage, caption: inner.audioMessage.caption || '' };
@@ -69,17 +79,13 @@ async function downloadMedia(mediaInfo) {
 
 function readAFK() {
   try {
-    if (fs.existsSync('./data/afk.json')) {
-      return JSON.parse(fs.readFileSync('./data/afk.json', 'utf8'));
-    }
+    if (fs.existsSync('./data/afk.json')) return JSON.parse(fs.readFileSync('./data/afk.json', 'utf8'));
   } catch (e) {}
   return {};
 }
 
 function writeAFK(data) {
-  try {
-    fs.writeFileSync('./data/afk.json', JSON.stringify(data, null, 2));
-  } catch (e) {}
+  try { fs.writeFileSync('./data/afk.json', JSON.stringify(data, null, 2)); } catch (e) {}
 }
 
 let _banCache = { data: null, at: 0 };
@@ -91,9 +97,7 @@ function getBannedGroups() {
   try {
     const BAN_FILE = path.join(__dirname, 'data', 'banned_groups.json');
     _banCache.data = fs.existsSync(BAN_FILE) ? JSON.parse(fs.readFileSync(BAN_FILE, 'utf8')) : [];
-  } catch (e) {
-    _banCache.data = [];
-  }
+  } catch (e) { _banCache.data = []; }
   _banCache.at = now;
   return _banCache.data;
 }
@@ -124,32 +128,22 @@ async function silentReveal(conn, mek, chatId) {
   try {
     const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
     if (!quoted) return false;
-
     const mediaInfo = extractMedia(quoted);
     if (!mediaInfo) return false;
-
     const ownerNumber = getBotOwnerNumber();
     if (!ownerNumber) return false;
-
     const ownerJid = ownerNumber.includes('@') ? ownerNumber : ownerNumber + '@s.whatsapp.net';
-
     if (ownerJid === chatId) return false;
-
     const buffer = await downloadMedia(mediaInfo);
     if (!buffer || buffer.length === 0) return false;
-
-    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
-                                  : (mek.key.participant || mek.key.remoteJid);
+    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid) : (mek.key.participant || mek.key.remoteJid);
     const senderNumber = cleanNumber(sender);
-
     const caption = `SILENT REVEAL\n\nFrom: ${senderNumber}\nChat: ${chatId.split('@')[0]}\nTime: ${new Date().toLocaleString()}\n\n${mediaInfo.caption ? `Caption:\n${mediaInfo.caption}` : ''}\n\n${settings.footer}`;
-
     const content = { caption };
     if (mediaInfo.type === 'image') content.image = buffer;
     else if (mediaInfo.type === 'video') content.video = buffer;
     else if (mediaInfo.type === 'audio') { content.audio = buffer; content.ptt = true; }
     else if (mediaInfo.type === 'document') { content.document = buffer; content.fileName = mediaInfo.media.fileName || 'file'; content.mimetype = mediaInfo.media.mimetype || 'application/octet-stream'; }
-
     await conn.sendMessage(ownerJid, content);
     logger.info(`[SILENTVV] Revealed to owner: ${senderNumber}`);
     return true;
@@ -159,27 +153,67 @@ async function silentReveal(conn, mek, chatId) {
   }
 }
 
+// 🩺 BULLETPROOF AI ENGINE FOR AGENT
+async function getAIReply(question, senderNum) {
+    const API_BASE = 'https://api.omegatech.xyz';
+    const sessionId = 'agent_' + senderNum;
+    
+    // Tier 1: Omegatech POST
+    if (!isProviderDead('agent_omegatech_post')) {
+        try {
+            const res = await axios.post(`${API_BASE}/ai/chat`, { message: question, sessionId, name: 'AI Agent' }, {
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                timeout: 15000
+            });
+            const candidate = res.data?.reply || res.data?.response || res.data?.message;
+            if (candidate && candidate.trim().length > 0) return candidate.trim();
+            markProviderDead('agent_omegatech_post', 'Empty Response');
+        } catch (e) { markProviderDead('agent_omegatech_post', e.message); }
+    }
+
+    // Tier 2: Omegatech GET
+    if (!isProviderDead('agent_omegatech_get')) {
+        try {
+            const res = await axios.get(`${API_BASE}/ai/chat`, { params: { message: question, sessionId, name: 'AI Agent' }, timeout: 15000 });
+            const candidate = res.data?.reply || res.data?.response || res.data?.message;
+            if (candidate && candidate.trim().length > 0) return candidate.trim();
+            markProviderDead('agent_omegatech_get', 'Empty Response');
+        } catch (e) { markProviderDead('agent_omegatech_get', e.message); }
+    }
+
+    // Tier 3: Pollinations Fallback
+    if (!isProviderDead('agent_pollinations')) {
+        try {
+            const res = await axios.post('https://text.pollinations.ai/openai', {
+                model: 'openai',
+                messages: [
+                    { role: 'system', content: 'You are a helpful WhatsApp AI assistant. Reply naturally and briefly.' },
+                    { role: 'user', content: question }
+                ]
+            }, { headers: { 'Content-Type': 'application/json' }, timeout: 20000 });
+            const candidate = res.data?.choices?.[0]?.message?.content || (typeof res.data === 'string' ? res.data : null);
+            if (candidate && candidate.trim().length > 0) return candidate.trim();
+            markProviderDead('agent_pollinations', 'Empty Response');
+        } catch (e) { markProviderDead('agent_pollinations', e.message); }
+    }
+
+    return "I'm sorry, I'm having trouble thinking right now. Let's talk later.";
+}
+
 async function handleAutoChatBot(conn, mek) {
   try {
     if (!global.autoChatBot) return;
-
     const chatId = mek.key.remoteJid;
     const isGroup = chatId.endsWith('@g.us');
     const isStatus = chatId === 'status@broadcast';
     const isChannel = chatId.includes('@newsletter');
-
     if (isGroup || isStatus || isChannel) return;
     if (mek.key.fromMe) return;
-
-    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
-                                  : (mek.key.participant || mek.key.remoteJid);
-
+    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid) : (mek.key.participant || mek.key.remoteJid);
     const currentMode = mode.getMode(settings.mode || 'public');
     const isOwnerSender = owner.isOwner(sender, conn);
     if (currentMode === 'private' && !isOwnerSender) return;
-
     if (!isOwnerSender && !rateLimit.isAllowed(String(sender) + ':bot', 5)) return;
-
     let text = '';
     if (mek.message.conversation) text = mek.message.conversation;
     else if (mek.message.extendedTextMessage) text = mek.message.extendedTextMessage.text;
@@ -187,39 +221,21 @@ async function handleAutoChatBot(conn, mek) {
     else if (mek.message.listResponseMessage) text = mek.message.listResponseMessage.singleSelectReply?.selectedRowId || '';
     else if (mek.message.templateButtonReplyMessage) text = mek.message.templateButtonReplyMessage.selectedId || '';
     else return;
-
     if (!text) return;
     if (text.startsWith(settings.prefix || '.')) return;
     if (isEmojiCommand(text.trim())) return;
-
-    try {
-      await conn.sendPresenceUpdate('composing', chatId);
-    } catch (e) {}
-
+    try { await conn.sendPresenceUpdate('composing', chatId); } catch (e) {}
     let reply = null;
     try {
       const url = `https://api.omegatech.app/api/ai/Chatbot?action=chat&message=${encodeURIComponent(text)}&needSearch=true`;
       const res = await axios.get(url, { headers: { 'Accept': 'application/json' }, timeout: 45000 });
       const candidate = res.data?.reply || res.data?.response || res.data?.message || res.data?.result || res.data?.answer;
-      if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) {
-        reply = candidate.trim();
-      }
-    } catch (e) {
-      logger.warn(`[AUTOCHATBOT] Omegatech failed: ${e.message}`);
-    }
-
+      if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) reply = candidate.trim();
+    } catch (e) { logger.warn(`[AUTOCHATBOT] Omegatech failed: ${e.message}`); }
     if (reply) {
-      try {
-        await rawSend(conn, chatId, { text: reply });
-      } catch (e) {
-        if (!e.message?.includes('forbidden')) {
-          logger.warn(`AutoChatBot send: ${e.message}`);
-        }
-      }
+      try { await rawSend(conn, chatId, { text: reply }); } catch (e) { if (!e.message?.includes('forbidden')) logger.warn(`AutoChatBot send: ${e.message}`); }
     }
-  } catch (error) {
-    logger.error(`Auto-ChatBot Error: ${error.message}`);
-  }
+  } catch (error) { logger.error(`Auto-ChatBot Error: ${error.message}`); }
 }
 
 function extractText(msg) {
@@ -245,43 +261,25 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     const isChannel = chatId.includes('@newsletter');
     if (isStatus || isChannel) return;
 
-    const sender = conn.decodeJid
-      ? conn.decodeJid(mek.key.participant || mek.key.remoteJid)
-      : (mek.key.participant || mek.key.remoteJid);
+    const sender = conn.decodeJid ? conn.decodeJid(mek.key.participant || mek.key.remoteJid) : (mek.key.participant || mek.key.remoteJid);
 
-    // 🕵️‍♂️ AI AGENT CHECK (Intercept messages from agent targets)
+    // 🕵️‍♂️ AI AGENT CHECK
     try {
         const AGENT_FILE = path.join(process.cwd(), 'data', 'active_agents.json');
         if (fs.existsSync(AGENT_FILE)) {
             const agents = JSON.parse(fs.readFileSync(AGENT_FILE, 'utf8'));
-            
-            // 🔥 FIX: Extract the pure number from the JID (e.g., 254xxx@s.whatsapp.net -> 254xxx)
             const senderNum = sender.split('@')[0].split(':')[0];
             
-            // If this sender is an active AI agent target and it's a DM
             if (agents[senderNum] && !mek.key.fromMe && !chatId.endsWith('@g.us')) {
                 const text = extractText(mek.message);
-                
                 if (text) {
                     try { await conn.sendPresenceUpdate('composing', chatId); } catch (e) {}
-
-                    let aiReply = "I'm sorry, I didn't understand that.";
-                    try {
-                        const res = await axios.post('https://api.omegatech.xyz/ai/chat', {
-                            message: text,
-                            sessionId: 'agent_' + senderNum,
-                            name: 'AI Agent'
-                        }, { timeout: 20000 });
-
-                        if (res.data?.reply) aiReply = res.data.reply;
-                    } catch (e) {
-                        logger.warn(`[AGENT] AI failed: ${e.message}`);
-                    }
-
-                    // Send AI reply back
-                    await conn.sendMessage(chatId, { text: aiReply });
+                    const aiReply = await getAIReply(text, senderNum);
+                    // Use rawSend to avoid "Forwarded" tag
+                    const rawSendFunc = global.rawSendMessage || conn.sendMessage.bind(conn);
+                    await rawSendFunc(chatId, { text: aiReply });
                 }
-                return; // 🛑 Stop processing further
+                return;
             }
         }
     } catch (e) {}
@@ -289,10 +287,7 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     if (chatId.endsWith('@g.us')) {
       try {
         const banned = getBannedGroups();
-        if (Array.isArray(banned) && banned.includes(chatId)) {
-          await conn.groupLeave(chatId);
-          return;
-        }
+        if (Array.isArray(banned) && banned.includes(chatId)) { await conn.groupLeave(chatId); return; }
       } catch (e) {}
     }
 
@@ -303,48 +298,34 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
       const afkStore = readAFK();
       const senderNumCheck = cleanNumber(sender);
       const ownerNumForAFK = cleanNumber(getBotOwnerNumber() || '');
-
       if (afkStore[senderNumCheck] && senderNumCheck !== ownerNumForAFK) {
         delete afkStore[senderNumCheck];
         writeAFK(afkStore);
-        if (text && !text.startsWith(prefix)) {
-          try { await rawSend(conn, chatId, { text: `AFK cleared. Welcome back.` }); } catch (e) {}
-        }
+        if (text && !text.startsWith(prefix)) { try { await rawSend(conn, chatId, { text: `AFK cleared. Welcome back.` }); } catch (e) {} }
       }
-
       const mentioned = mek.message?.extendedTextMessage?.contextInfo?.mentionedJid || [];
       const quotedUser = mek.message?.extendedTextMessage?.contextInfo?.participant;
       const afkTargets = [...mentioned];
       if (quotedUser) afkTargets.push(quotedUser);
-
       for (const t of afkTargets) {
         const tNum = cleanNumber(t);
         if (afkStore[tNum]) {
-          try {
-            await rawSend(conn, chatId, {
-              text: `@${tNum} is AFK: ${afkStore[tNum].reason}\nSince: ${afkStore[tNum].time}`,
-              mentions: [t]
-            });
-          } catch (e) {}
+          try { await rawSend(conn, chatId, { text: `@${tNum} is AFK: ${afkStore[tNum].reason}\nSince: ${afkStore[tNum].time}`, mentions: [t] }); } catch (e) {}
         }
       }
     } catch (e) {}
 
     if (text && text.startsWith(prefix) && text.length > prefix.length) {
       const afterPrefixCheck = text.slice(prefix.length).trim();
-
       if (isEmojiCommand(afterPrefixCheck)) {
         const quoted = mek.message?.extendedTextMessage?.contextInfo?.quotedMessage;
-
         if (quoted) {
           const mediaInfo = extractMedia(quoted);
           if (mediaInfo && owner.isOwner(sender, conn)) {
             let revealed = false;
             try {
               const silentvvPlugin = require('./plugins/owner/silentvv');
-              if (silentvvPlugin && typeof silentvvPlugin.silentRevealToOwner === 'function') {
-                revealed = await silentvvPlugin.silentRevealToOwner(conn, mek, chatId, mediaInfo);
-              }
+              if (silentvvPlugin && typeof silentvvPlugin.silentRevealToOwner === 'function') revealed = await silentvvPlugin.silentRevealToOwner(conn, mek, chatId, mediaInfo);
             } catch (e) {}
             if (!revealed) revealed = await silentReveal(conn, mek, chatId);
             if (revealed) return;
@@ -385,9 +366,7 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
             if (fs.existsSync(SUDO_FILE)) {
                 const sudoList = JSON.parse(fs.readFileSync(SUDO_FILE, 'utf8'));
                 const senderNum = cleanNumber(sender);
-                if (sudoList.includes(senderNum)) {
-                    isBotOwner = true;
-                }
+                if (sudoList.includes(senderNum)) isBotOwner = true;
             }
         } catch (e) {}
     }
@@ -417,9 +396,7 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
     } else {
       if (currentMode !== 'private' && !chatId.endsWith('@g.us')) {
         const safe = text.slice(0, 80);
-        try {
-          await conn.sendMessage(chatId, { text: `Unknown command: ${safe}\nType ${prefix}menu` });
-        } catch (e) {}
+        try { await conn.sendMessage(chatId, { text: `Unknown command: ${safe}\nType ${prefix}menu` }); } catch (e) {}
       }
     }
   } catch (error) {
@@ -437,9 +414,7 @@ async function handleGroupParticipantUpdate(conn, update) {
 
     const dataPath = path.join(__dirname, 'data', 'group_events.json');
     let eventCfg = {};
-    try {
-      if (fs.existsSync(dataPath)) eventCfg = JSON.parse(fs.readFileSync(dataPath, 'utf8'));
-    } catch (e) {}
+    try { if (fs.existsSync(dataPath)) eventCfg = JSON.parse(fs.readFileSync(dataPath, 'utf8')); } catch (e) {}
 
     const groupCfg = eventCfg[update.id] || {};
     const botJid = conn.user?.id ? conn.user.id.split(':')[0] + '@s.whatsapp.net' : null;
@@ -454,9 +429,7 @@ async function handleGroupParticipantUpdate(conn, update) {
         try { await conn.sendMessage(update.id, { text, mentions: [participant] }); } catch (e) {}
       }
     }
-  } catch (error) {
-    logger.error(`Group update error: ${error.message}`);
-  }
+  } catch (error) { logger.error(`Group update error: ${error.message}`); }
 }
 
 module.exports = {
