@@ -36,7 +36,7 @@ module.exports = {
             agents[targetNum] = { active: true, startedAt: new Date().toISOString() };
             fs.writeFileSync(AGENT_FILE, JSON.stringify(agents, null, 2));
 
-            // 🔥 THE FIX: Use rawSend to bypass the channel "Forwarded" wrapper
+            // 🔥 Use rawSend to bypass the channel "Forwarded" wrapper
             const rawSend = global.rawSendMessage || conn.sendMessage.bind(conn);
             await rawSend(targetJid, { text: "Hi, how are you?" });
             
