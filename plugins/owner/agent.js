@@ -3,7 +3,6 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../../lib/logger');
 
-// Store active agents in memory (and save to file to survive restarts)
 const AGENT_FILE = path.join(process.cwd(), 'data', 'active_agents.json');
 if (!fs.existsSync(AGENT_FILE)) fs.writeFileSync(AGENT_FILE, JSON.stringify({}));
 
@@ -30,16 +29,16 @@ module.exports = {
         let agents = JSON.parse(fs.readFileSync(AGENT_FILE, 'utf8'));
 
         if (action === 'start') {
-            if (agents[targetJid]) {
+            if (agents[targetNum]) {
                 return conn.sendMessage(chatId, { text: `⚠️ Agent is already active for +${targetNum}` });
             }
 
-            // Activate agent
-            agents[targetJid] = { active: true, startedAt: new Date().toISOString() };
+            agents[targetNum] = { active: true, startedAt: new Date().toISOString() };
             fs.writeFileSync(AGENT_FILE, JSON.stringify(agents, null, 2));
 
-            // Send the first message
-            await conn.sendMessage(targetJid, { text: "Hi, how are you?" });
+            // 🔥 THE FIX: Use rawSend to bypass the channel "Forwarded" wrapper
+            const rawSend = global.rawSendMessage || conn.sendMessage.bind(conn);
+            await rawSend(targetJid, { text: "Hi, how are you?" });
             
             await conn.sendMessage(chatId, { 
                 text: `✅ *AI Agent Started!*\n\nTarget: +${targetNum}\nThe bot will now reply to their messages using AI.\n\nType ${settings.prefix}agent stop ${targetNum} to stop.` 
@@ -47,14 +46,16 @@ module.exports = {
         } 
         
         else if (action === 'stop') {
-            if (!agents[targetJid]) {
+            if (!agents[targetNum]) {
                 return conn.sendMessage(chatId, { text: `⚠️ No active agent for +${targetNum}` });
             }
 
-            delete agents[targetJid];
+            delete agents[targetNum];
             fs.writeFileSync(AGENT_FILE, JSON.stringify(agents, null, 2));
 
-            await conn.sendMessage(targetJid, { text: "Goodbye! 👋" });
+            const rawSend = global.rawSendMessage || conn.sendMessage.bind(conn);
+            await rawSend(targetJid, { text: "Goodbye! 👋" });
+            
             await conn.sendMessage(chatId, { text: `🛑 *AI Agent Stopped* for +${targetNum}` });
         } 
         
