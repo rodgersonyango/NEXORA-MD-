@@ -10,7 +10,6 @@ const logger = require('./lib/logger');
 
 const cleanNumber = owner.cleanNumber;
 
-// 🩺 SELF-HEALING AI MEMORY
 const deadProviders = new Map();
 const DEAD_PROVIDER_TTL = 5 * 60 * 1000;
 
@@ -153,51 +152,41 @@ async function silentReveal(conn, mek, chatId) {
   }
 }
 
-// 🩺 BULLETPROOF AI ENGINE FOR AGENT
-async function getAIReply(question, senderNum) {
-    const API_BASE = 'https://api.omegatech.xyz';
-    const sessionId = 'agent_' + senderNum;
-    
-    // Tier 1: Omegatech POST
-    if (!isProviderDead('agent_omegatech_post')) {
-        try {
-            const res = await axios.post(`${API_BASE}/ai/chat`, { message: question, sessionId, name: 'AI Agent' }, {
-                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-                timeout: 15000
-            });
-            const candidate = res.data?.reply || res.data?.response || res.data?.message;
-            if (candidate && candidate.trim().length > 0) return candidate.trim();
-            markProviderDead('agent_omegatech_post', 'Empty Response');
-        } catch (e) { markProviderDead('agent_omegatech_post', e.message); }
-    }
-
-    // Tier 2: Omegatech GET
-    if (!isProviderDead('agent_omegatech_get')) {
-        try {
-            const res = await axios.get(`${API_BASE}/ai/chat`, { params: { message: question, sessionId, name: 'AI Agent' }, timeout: 15000 });
-            const candidate = res.data?.reply || res.data?.response || res.data?.message;
-            if (candidate && candidate.trim().length > 0) return candidate.trim();
-            markProviderDead('agent_omegatech_get', 'Empty Response');
-        } catch (e) { markProviderDead('agent_omegatech_get', e.message); }
-    }
-
-    // Tier 3: Pollinations Fallback
-    if (!isProviderDead('agent_pollinations')) {
+// 🩺 BULLETPROOF AI ENGINE FOR AUTO-CHATBOT (Pollinations Primary)
+async function getAutoBotReply(text) {
+    // Tier 1: Pollinations (Free, No Key, OpenAI Compatible)
+    if (!isProviderDead('autobot_pollinations')) {
         try {
             const res = await axios.post('https://text.pollinations.ai/openai', {
                 model: 'openai',
                 messages: [
-                    { role: 'system', content: 'You are a helpful WhatsApp AI assistant. Reply naturally and briefly.' },
-                    { role: 'user', content: question }
+                    { role: 'system', content: 'You are NEXORA, a helpful WhatsApp AI assistant. Reply naturally and briefly.' },
+                    { role: 'user', content: text }
                 ]
-            }, { headers: { 'Content-Type': 'application/json' }, timeout: 20000 });
+            }, { headers: { 'Content-Type': 'application/json' }, timeout: 25000 });
+            
             const candidate = res.data?.choices?.[0]?.message?.content || (typeof res.data === 'string' ? res.data : null);
             if (candidate && candidate.trim().length > 0) return candidate.trim();
-            markProviderDead('agent_pollinations', 'Empty Response');
-        } catch (e) { markProviderDead('agent_pollinations', e.message); }
+            markProviderDead('autobot_pollinations', 'Empty Response');
+        } catch (e) { 
+            markProviderDead('autobot_pollinations', e.message); 
+        }
     }
 
-    return "I'm sorry, I'm having trouble thinking right now. Let's talk later.";
+    // Tier 2: Omegatech (Backup)
+    if (!isProviderDead('autobot_omegatech')) {
+        try {
+            const url = `https://api.omegatech.app/api/ai/Chatbot?action=chat&message=${encodeURIComponent(text)}&needSearch=true`;
+            const res = await axios.get(url, { headers: { 'Accept': 'application/json' }, timeout: 20000 });
+            const candidate = res.data?.reply || res.data?.response || res.data?.message;
+            if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) return candidate.trim();
+            markProviderDead('autobot_omegatech', 'Empty Response');
+        } catch (e) { 
+            markProviderDead('autobot_omegatech', e.message); 
+        }
+    }
+
+    return null;
 }
 
 async function handleAutoChatBot(conn, mek) {
@@ -224,14 +213,11 @@ async function handleAutoChatBot(conn, mek) {
     if (!text) return;
     if (text.startsWith(settings.prefix || '.')) return;
     if (isEmojiCommand(text.trim())) return;
+    
     try { await conn.sendPresenceUpdate('composing', chatId); } catch (e) {}
-    let reply = null;
-    try {
-      const url = `https://api.omegatech.app/api/ai/Chatbot?action=chat&message=${encodeURIComponent(text)}&needSearch=true`;
-      const res = await axios.get(url, { headers: { 'Accept': 'application/json' }, timeout: 45000 });
-      const candidate = res.data?.reply || res.data?.response || res.data?.message || res.data?.result || res.data?.answer;
-      if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) reply = candidate.trim();
-    } catch (e) { logger.warn(`[AUTOCHATBOT] Omegatech failed: ${e.message}`); }
+    
+    const reply = await getAutoBotReply(text);
+    
     if (reply) {
       try { await rawSend(conn, chatId, { text: reply }); } catch (e) { if (!e.message?.includes('forbidden')) logger.warn(`AutoChatBot send: ${e.message}`); }
     }
@@ -274,10 +260,11 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
                 const text = extractText(mek.message);
                 if (text) {
                     try { await conn.sendPresenceUpdate('composing', chatId); } catch (e) {}
-                    const aiReply = await getAIReply(text, senderNum);
-                    // Use rawSend to avoid "Forwarded" tag
-                    const rawSendFunc = global.rawSendMessage || conn.sendMessage.bind(conn);
-                    await rawSendFunc(chatId, { text: aiReply });
+                    const aiReply = await getAutoBotReply(text);
+                    if (aiReply) {
+                        const rawSendFunc = global.rawSendMessage || conn.sendMessage.bind(conn);
+                        await rawSendFunc(chatId, { text: aiReply });
+                    }
                 }
                 return;
             }
