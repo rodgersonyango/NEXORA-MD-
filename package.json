@@ -24,6 +24,7 @@
     "https-proxy-agent": "^7.0.5",
     "moment-timezone": "^0.5.45",
     "node-cache": "^5.1.2",
+    "pdf-parse": "^1.1.1",
     "pino": "^8.21.0",
     "qs": "^6.12.0",
     "sharp": "^0.33.2"
