@@ -152,9 +152,7 @@ async function silentReveal(conn, mek, chatId) {
   }
 }
 
-// 🩺 BULLETPROOF AI ENGINE FOR AUTO-CHATBOT (Pollinations Primary)
 async function getAutoBotReply(text) {
-    // Tier 1: Pollinations (Free, No Key, OpenAI Compatible)
     if (!isProviderDead('autobot_pollinations')) {
         try {
             const res = await axios.post('https://text.pollinations.ai/openai', {
@@ -164,16 +162,12 @@ async function getAutoBotReply(text) {
                     { role: 'user', content: text }
                 ]
             }, { headers: { 'Content-Type': 'application/json' }, timeout: 25000 });
-            
             const candidate = res.data?.choices?.[0]?.message?.content || (typeof res.data === 'string' ? res.data : null);
             if (candidate && candidate.trim().length > 0) return candidate.trim();
             markProviderDead('autobot_pollinations', 'Empty Response');
-        } catch (e) { 
-            markProviderDead('autobot_pollinations', e.message); 
-        }
+        } catch (e) { markProviderDead('autobot_pollinations', e.message); }
     }
 
-    // Tier 2: Omegatech (Backup)
     if (!isProviderDead('autobot_omegatech')) {
         try {
             const url = `https://api.omegatech.app/api/ai/Chatbot?action=chat&message=${encodeURIComponent(text)}&needSearch=true`;
@@ -181,9 +175,7 @@ async function getAutoBotReply(text) {
             const candidate = res.data?.reply || res.data?.response || res.data?.message;
             if (candidate && typeof candidate === 'string' && candidate.trim().length > 0) return candidate.trim();
             markProviderDead('autobot_omegatech', 'Empty Response');
-        } catch (e) { 
-            markProviderDead('autobot_omegatech', e.message); 
-        }
+        } catch (e) { markProviderDead('autobot_omegatech', e.message); }
     }
 
     return null;
@@ -213,11 +205,11 @@ async function handleAutoChatBot(conn, mek) {
     if (!text) return;
     if (text.startsWith(settings.prefix || '.')) return;
     if (isEmojiCommand(text.trim())) return;
-    
+
     try { await conn.sendPresenceUpdate('composing', chatId); } catch (e) {}
-    
+
     const reply = await getAutoBotReply(text);
-    
+
     if (reply) {
       try { await rawSend(conn, chatId, { text: reply }); } catch (e) { if (!e.message?.includes('forbidden')) logger.warn(`AutoChatBot send: ${e.message}`); }
     }
@@ -255,7 +247,7 @@ async function handleMessages(conn, chatUpdate, isOwnerFlag) {
         if (fs.existsSync(AGENT_FILE)) {
             const agents = JSON.parse(fs.readFileSync(AGENT_FILE, 'utf8'));
             const senderNum = sender.split('@')[0].split(':')[0];
-            
+
             if (agents[senderNum] && !mek.key.fromMe && !chatId.endsWith('@g.us')) {
                 const text = extractText(mek.message);
                 if (text) {
