@@ -69,6 +69,7 @@ const ANTIEDIT_CONFIG_PATH = './data/antiedit.json';
 const ANTIBLOCK_CONFIG_PATH = './data/antiblock.json';
 const STATUS_CONFIG_PATH = './data/status.json';
 const SNIPER_CONFIG_PATH = './data/sniper.json';
+const AUTOREAD_CONFIG_PATH = './data/autoread.json';
 
 function loadAntiDeleteState() {
   try {
@@ -584,7 +585,7 @@ async function startNexora() {
     Nexora.ev.on('presence.update', async (update) => {
       try {
         await stalkerEngine.handlePresenceUpdate(Nexora, update);
-        
+
         if (global.radarActiveGroup && update.id === global.radarActiveGroup) {
           const presences = update.presences;
           if (presences) {
@@ -658,10 +659,15 @@ async function startNexora() {
         if (!global.ghostMode) {
           setImmediate(async () => {
             try {
-              if (settings.autoRead && chatId.endsWith('@g.us')) {
-                await Nexora.readMessages([mek.key]);
-              }
-              if (global.autoReadPM && !chatId.endsWith('@g.us')) {
+              let autoReadEnabled = settings.autoRead;
+              try {
+                if (fs.existsSync(AUTOREAD_CONFIG_PATH)) {
+                  const cfg = JSON.parse(fs.readFileSync(AUTOREAD_CONFIG_PATH, 'utf8'));
+                  autoReadEnabled = cfg.enabled === true;
+                }
+              } catch (e) {}
+
+              if (autoReadEnabled) {
                 await Nexora.readMessages([mek.key]);
               }
             } catch (e) {}
