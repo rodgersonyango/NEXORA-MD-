@@ -1,10 +1,5 @@
-/**
- * NEXORA MD - View-Once Reveal + Delete
- * Reveals the view-once AND deletes the original
- * Usage: reply to a view-once with .vv2
- */
-
 const settings = require('../../settings');
+const logger = require('../../lib/logger');
 const { downloadContentFromMessage } = require('@whiskeysockets/baileys');
 
 function extractViewOnce(quoted) {
@@ -31,10 +26,10 @@ async function downloadMedia(mediaInfo) {
 module.exports = {
   name: 'vv2',
   aliases: ['vreveal', 'vvd'],
-  category: 'general',
+  category: 'tools',
   description: 'Reveal a view-once and delete the original',
   usage: '.vv2 (reply to a view-once)',
-  react: '✅',
+  react: '🕵️‍♂️',
 
   async execute(conn, mek, args, chatId, isOwner) {
     try {
@@ -42,57 +37,64 @@ module.exports = {
       const quoted = contextInfo?.quotedMessage;
       const quotedKey = contextInfo?.stanzaId;
 
-      if (!quoted) {
+      if (!quoted || !quotedKey) {
         await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-        await conn.sendMessage(chatId, {
-          text: `Reply to a view-once with ${settings.prefix || '.'}vv2\n\n${settings.footer}`
-        });
-        return;
+        return conn.sendMessage(chatId, {
+          text: `❌ Reply to a *View-Once* message to reveal it.\n\n${settings.footer}`
+        }, { quoted: mek });
       }
 
       const mediaInfo = extractViewOnce(quoted);
       if (!mediaInfo) {
         await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-        await conn.sendMessage(chatId, {
-          text: `No view-once media found.\n\n${settings.footer}`
-        });
-        return;
+        return conn.sendMessage(chatId, {
+          text: `❌ No view-once media found in the replied message.\n\n${settings.footer}`
+        }, { quoted: mek });
       }
 
-      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
+      await conn.sendMessage(chatId, { react: { text: '⏳', key: mek.key } });
 
       const buffer = await downloadMedia(mediaInfo);
       if (!buffer || buffer.length === 0) {
         await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } });
-        return;
+        return conn.sendMessage(chatId, { text: `❌ Failed to download media.` }, { quoted: mek });
       }
 
-      const caption = `VIEW-ONCE REVEALED\n\nTime: ${new Date().toLocaleString()}\n\n${mediaInfo.caption ? 'Caption:\n' + mediaInfo.caption + '\n\n' : ''}${settings.footer}`;
+      const caption = `🕵️‍♂️ *VIEW-ONCE REVEALED*\n\n⏰ Time: ${new Date().toLocaleString()}\n\n${mediaInfo.caption ? `📝 Caption:\n${mediaInfo.caption}\n\n` : ''}${settings.footer}`;
 
       const content = { caption };
       if (mediaInfo.type === 'image') content.image = buffer;
       else if (mediaInfo.type === 'video') content.video = buffer;
       else if (mediaInfo.type === 'audio') { content.audio = buffer; content.ptt = true; }
 
-      await conn.sendMessage(chatId, content);
+      await conn.sendMessage(chatId, content, { quoted: mek });
 
-      // Try to delete the original view-once
+      // 🔥 THE FIX: Correct protocol deletion
       try {
-        await conn.sendMessage(chatId, {
-          delete: {
+        const msgKey = {
             remoteJid: chatId,
             fromMe: false,
             id: quotedKey,
-            participant: contextInfo?.participant
-          }
-        });
-        console.log('[VV2] Original deleted');
+            participant: contextInfo?.participant || chatId
+        };
+        
+        await conn.relayMessage(chatId, {
+            protocolMessage: {
+                key: msgKey,
+                type: 0, // 0 = REVOKE
+                timestampMs: Date.now().toString()
+            }
+        }, { messageId: '3EB0' + Math.random().toString(36).substring(2, 18).toUpperCase() });
+        
+        logger.info(`[VV2] Original view-once deleted successfully.`);
       } catch (delErr) {
-        console.log('[VV2] Delete failed:', delErr.message);
+        logger.warn(`[VV2] Delete failed: ${delErr.message}`);
       }
 
+      await conn.sendMessage(chatId, { react: { text: '✅', key: mek.key } });
+
     } catch (error) {
-      console.log('[VV2] Error:', error.message);
+      logger.error(`[VV2] Error: ${error.message}`);
       try { await conn.sendMessage(chatId, { react: { text: '❌', key: mek.key } }); } catch (e) {}
     }
   }
