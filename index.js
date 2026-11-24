@@ -63,6 +63,9 @@ global.hasSentWelcome = false;
 global.completeMessageCache = new Map();
 global.radarActiveGroup = null;
 global.radarResults = {};
+global.messageStore = new Map();
+
+const MESSAGE_STORE_LIMIT = 1500;
 
 const ANTIDELETE_CONFIG_PATH = './data/antidelete_config.json';
 const ANTIEDIT_CONFIG_PATH = './data/antiedit.json';
@@ -70,10 +73,6 @@ const ANTIBLOCK_CONFIG_PATH = './data/antiblock.json';
 const STATUS_CONFIG_PATH = './data/status.json';
 const SNIPER_CONFIG_PATH = './data/sniper.json';
 const AUTOREAD_CONFIG_PATH = './data/autoread.json';
-
-// 🔥 NEW: MESSAGE STORE FOR VIEW-ONCE
-const MESSAGE_STORE_LIMIT = 1500;
-global.messageStore = new Map();
 
 function loadAntiDeleteState() {
   try {
@@ -459,9 +458,8 @@ async function startNexora() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
     const msgRetryCounterCache = new NodeCache();
 
-    // 🔥 THE FIX: Use Android browser to get view-once media
     const isRegistered = state.creds.registered;
-    
+
     const Nexora = makeWASocket({
       version,
       logger: pino({ level: 'silent' }),
@@ -612,7 +610,6 @@ async function startNexora() {
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
 
-        // 🔥 NEW: Store every message for view-once recovery
         if (mek.key.id && mek.message) {
             global.messageStore.set(mek.key.id, {
                 key: mek.key,
