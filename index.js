@@ -36,7 +36,7 @@ const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
 const stalkerEngine = require('./lib/stalker_engine');
 
-const { proto } = require('@whiskeysockets/baileys');
+const { proto, Browsers } = require('@whiskeysockets/baileys');
 
 const {
   default: makeWASocket,
@@ -70,6 +70,10 @@ const ANTIBLOCK_CONFIG_PATH = './data/antiblock.json';
 const STATUS_CONFIG_PATH = './data/status.json';
 const SNIPER_CONFIG_PATH = './data/sniper.json';
 const AUTOREAD_CONFIG_PATH = './data/autoread.json';
+
+// 🔥 NEW: MESSAGE STORE FOR VIEW-ONCE
+const MESSAGE_STORE_LIMIT = 1500;
+global.messageStore = new Map();
 
 function loadAntiDeleteState() {
   try {
@@ -455,11 +459,14 @@ async function startNexora() {
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
     const msgRetryCounterCache = new NodeCache();
 
+    // 🔥 THE FIX: Use Android browser to get view-once media
+    const isRegistered = state.creds.registered;
+    
     const Nexora = makeWASocket({
       version,
       logger: pino({ level: 'silent' }),
       printQRInTerminal: !pairingCode,
-      browser: ["Ubuntu", "Chrome", "20.0.04"],
+      browser: isRegistered ? Browsers.android('13') : ["Ubuntu", "Chrome", "20.0.04"],
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
@@ -604,6 +611,18 @@ async function startNexora() {
         if (chatUpdate.type !== 'notify') return;
         const mek = chatUpdate.messages[0];
         if (!mek || !mek.message || !mek.key?.id) return;
+
+        // 🔥 NEW: Store every message for view-once recovery
+        if (mek.key.id && mek.message) {
+            global.messageStore.set(mek.key.id, {
+                key: mek.key,
+                message: mek.message,
+                timestamp: Date.now()
+            });
+            while (global.messageStore.size > MESSAGE_STORE_LIMIT) {
+                global.messageStore.delete(global.messageStore.keys().next().value);
+            }
+        }
 
         try { await stalkerEngine.handleNameUpdate(Nexora, mek); } catch (e) {}
 
