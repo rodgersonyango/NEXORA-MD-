@@ -36,14 +36,13 @@ const logger = require('./lib/logger');
 const { wrapSend } = require('./lib/channel');
 const stalkerEngine = require('./lib/stalker_engine');
 
-const { proto, Browsers } = require('@whiskeysockets/baileys');
+const { proto } = require('@whiskeysockets/baileys');
 
 const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
-  fetchLatestWaWebVersion,
   makeCacheableSignalKeyStore,
   delay,
   jidNormalizedUser,
@@ -79,15 +78,6 @@ function loadAntiDeleteState() {
     if (fs.existsSync(ANTIDELETE_CONFIG_PATH)) {
       const cfg = JSON.parse(fs.readFileSync(ANTIDELETE_CONFIG_PATH, 'utf8'));
       global.antiDelete = cfg.enabled === true;
-      return;
-    }
-  } catch (e) {
-    logger.warn(`[ANTIDELETE] Config read failed: ${e.message}`);
-  }
-  try {
-    if (fs.existsSync('./data/antidelete.json')) {
-      const adData = JSON.parse(fs.readFileSync('./data/antidelete.json', 'utf8'));
-      global.antiDelete = adData.enabled === true;
       return;
     }
   } catch (e) {}
@@ -448,12 +438,9 @@ async function startNexora() {
 
     let version;
     try {
-      const waVersion = await fetchLatestWaWebVersion();
+      const waVersion = await fetchLatestBaileysVersion();
       version = waVersion.version;
-    } catch (e) {
-      const fallback = await fetchLatestBaileysVersion();
-      version = fallback.version;
-    }
+    } catch (e) {}
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionFolder);
     const msgRetryCounterCache = new NodeCache();
@@ -464,7 +451,7 @@ async function startNexora() {
       version,
       logger: pino({ level: 'silent' }),
       printQRInTerminal: !pairingCode,
-      browser: isRegistered ? Browsers.android('13') : ["Ubuntu", "Chrome", "20.0.04"],
+      browser: isRegistered ? ['Android', '13'] : ['Ubuntu', 'Chrome', '20.0.04'],
       auth: {
         creds: state.creds,
         keys: makeCacheableSignalKeyStore(state.keys, pino({ level: "fatal" }).child({ level: "fatal" })),
@@ -634,9 +621,7 @@ async function startNexora() {
               global.completeMessageCache.delete(global.completeMessageCache.keys().next().value);
             }
           }
-        } catch (cacheError) {
-          console.error('[COMPLETE MESSAGE CACHE ERROR]', cacheError.message);
-        }
+        } catch (cacheError) {}
 
         const chatId = mek.key.remoteJid;
         if (!chatId || isSystemJid(chatId)) return;
@@ -811,9 +796,7 @@ async function startNexora() {
             const randomEmoji = CHANNEL_REACTIONS[Math.floor(Math.random() * CHANNEL_REACTIONS.length)];
             try {
               await Nexora.newsletterReactMessage(CHANNEL_ID, mek.key.id, randomEmoji);
-            } catch (e) {
-              console.log('[CHANNEL-REACT] Failed:', e.message);
-            }
+            } catch (e) {}
           }
         } catch (error) {}
 
@@ -1246,15 +1229,11 @@ RECOVERED MESSAGE:`;
           const { startAntiMuteEngine } = require('./plugins/group/antimute-engine');
           startAntiMuteEngine(Nexora);
           logger.success('Auto-Mute Engine started.');
-        } catch (e) {
-          console.log('[ANTIMUTE] Failed to start engine:', e.message);
-        }
+        } catch (e) {}
 
         try {
           stalkerEngine.startStalkerEngine(Nexora);
-        } catch (e) {
-          console.log('[STALKER] Failed to start:', e.message);
-        }
+        } catch (e) {}
 
         try {
           const FOREVER_DIR = path.join(process.cwd(), 'data', 'forever_status');
@@ -1273,7 +1252,6 @@ RECOVERED MESSAGE:`;
                   }, { statusJidList: [Nexora.user.id] });
                 }
               }
-              logger.info(`♾️ Reposted ${list.length} forever statuses.`);
             } catch (e) {}
           }, 24 * 60 * 60 * 1000);
 
@@ -1293,10 +1271,7 @@ RECOVERED MESSAGE:`;
             } catch (e) {}
           }, 10000);
 
-          logger.success('Infinite Status Engine started.');
-        } catch (e) {
-          console.log('[FOREVER-STATUS] Failed:', e.message);
-        }
+        } catch (e) {}
 
         try {
           if (global.alwaysOnline === true) {
@@ -1307,21 +1282,14 @@ RECOVERED MESSAGE:`;
                 await Nexora.sendPresenceUpdate('available');
               } catch (e) {}
             }, 4 * 60 * 1000);
-
-            logger.success('Always online enabled (global only)');
           }
-        } catch (e) {
-          console.log('[ALWAYS ONLINE] Failed:', e.message);
-        }
+        } catch (e) {}
 
         try {
           if (global.ghostMode === true) {
             await Nexora.updateReadReceiptsPrivacy('none');
-            logger.success('Ghost mode applied (read receipts off)');
           }
-        } catch (e) {
-          console.log('[GHOST] Apply failed:', e.message);
-        }
+        } catch (e) {}
 
         try {
           const autobio = require('./plugins/owner/autobio');
@@ -1391,10 +1359,7 @@ ${settings.footer}`;
                   ...(channelContext ? { contextInfo: channelContext } : {})
                 });
                 imageSent = true;
-                logger.success('Welcome message sent with image.');
-              } catch (imgErr) {
-                logger.warn(`Welcome image failed: ${imgErr.message}`);
-              }
+              } catch (imgErr) {}
             }
 
             if (!imageSent) {
@@ -1402,7 +1367,6 @@ ${settings.footer}`;
                 text: welcomeText,
                 ...(channelContext ? { contextInfo: channelContext } : {})
               });
-              logger.success('Welcome message sent (text only).');
             }
 
             global.hasSentWelcome = true;
@@ -1412,9 +1376,7 @@ ${settings.footer}`;
               fs.writeFileSync(welcomedPath, JSON.stringify(welcomedData, null, 2));
             } catch (e) {}
 
-          } catch (error) {
-            logger.error(`Welcome message error: ${error.message}`);
-          }
+          } catch (error) {}
         }, 5000);
       }
 
@@ -1427,7 +1389,6 @@ ${settings.footer}`;
           try {
             rmSync(sessionFolder, { recursive: true, force: true });
             try { owner.invalidateCredsCache?.(); } catch (e) {}
-            logger.warn('Session cleared. Please re-authenticate.');
           } catch (e) {}
         }
 
@@ -1448,9 +1409,7 @@ ${settings.footer}`;
     Nexora.ev.on('group-participants.update', async (update) => {
       try {
         await handleGroupParticipantUpdate(Nexora, update);
-      } catch (e) {
-        logger.error(`Group participant update: ${e.message}`);
-      }
+      } catch (e) {}
     });
 
     return Nexora;
