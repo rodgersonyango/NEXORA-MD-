@@ -460,13 +460,21 @@ async function startNexora() {
       syncFullHistory: false,
       downloadHistory: false,
       generateHighQualityLinkPreview: false,
+      // 🔥 FIX: Return a fallback message instead of an empty string
       getMessage: async (key) => {
         try {
           const jid = jidNormalizedUser(key.remoteJid);
           const msg = await store.loadMessage(jid, key.id);
-          return msg?.message || { conversation: "" };
+          if (msg && msg.message) return msg.message;
+          
+          // Fallback to global message store
+          if (global.messageStore.has(key.id)) {
+            return global.messageStore.get(key.id).message;
+          }
+          
+          return { conversation: "NEXORA MD" }; // Safe fallback
         } catch (e) {
-          return { conversation: "" };
+          return { conversation: "NEXORA MD" };
         }
       },
       msgRetryCounterCache,
@@ -503,6 +511,7 @@ async function startNexora() {
 
     const wipeSend = async function(jid, content, options = {}) {
       try {
+        // 🔥 FIX: Only strip quoted if it's broken
         if (options.quoted) {
           const qMsg = options.quoted;
           if (!qMsg || !qMsg.message || !qMsg.key || !qMsg.key.id) {
